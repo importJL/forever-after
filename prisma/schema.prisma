@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Wedding {
+  id          String   @id @default(cuid())
+  coupleName  String   @default("Our Wedding")
+  partner1    String   @default("")
+  partner2    String   @default("")
+  date        String   @default("")
+  venue       String   @default("")
+  venueAddress String  @default("")
+  theme       String   @default("Classic Elegance")
+  guestCount  Int      @default(0)
+  budgetTotal Float    @default(0)
+  notes       String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Guest {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @default("")
+  phone         String   @default("")
+  group         String   @default("General")
+  rsvpStatus    String   @default("pending") // pending, accepted, declined, maybe
+  mealPreference String  @default("")
+  dietaryNotes  String   @default("")
+  plusOne       Boolean  @default(false)
+  plusOneName   String   @default("")
+  tableNumber   Int      @default(0)
+  seatNumber    Int      @default(0)
+  role          String   @default("guest") // guest, bridesmaid, groomsman, family, officiant
+  notes         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model BudgetCategory {
+  id          String   @id @default(cuid())
+  name        String
+  icon        String   @default("CircleDollarSign")
+  budgeted    Float    @default(0)
+  spent       Float    @default(0)
+  color       String   @default("#e11d48")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  expenses    BudgetExpense[]
+}
+
+model BudgetExpense {
+  id          String   @id @default(cuid())
+  categoryId  String
+  description String
+  amount      Float
+  date        String   @default("")
+  vendor      String   @default("")
+  paid        Boolean  @default(false)
+  notes       String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category    BudgetCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @default("")
+  category    String   @default("General")
+  priority    String   @default("medium") // low, medium, high, urgent
+  status      String   @default("todo") // todo, in_progress, done, cancelled
+  dueDate     String   @default("")
+  assignee    String   @default("")
+  notes       String   @default("")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Vendor {
+  id          String   @id @default(cuid())
+  name        String
+  category    String   @default("")
+  contactPerson String @default("")
+  email       String   @default("")
+  phone       String   @default("")
+  website     String   @default("")
+  price       Float    @default(0)
+  depositPaid Float    @default(0)
+  status      String   @default("considering") // considering, booked, confirmed, cancelled
+  rating      Int      @default(0)
+  notes       String   @default("")
+  contractDate String  @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TimelineEvent {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @default("")
+  startTime   String
+  endTime     String   @default("")
+  location    String   @default("")
+  category    String   @default("ceremony") // ceremony, reception, photos, etc.
+  notes       String   @default("")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MediaItem {
+  id          String   @id @default(cuid())
+  title       String   @default("")
+  type        String   @default("image") // image, video, link
+  url         String   @default("")
+  thumbnail   String   @default("")
+  category    String   @default("inspiration") // inspiration, photo, video, mood-board
+  notes       String   @default("")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model WebLink {
+  id          String   @id @default(cuid())
+  title       String
+  url         String
+  description String   @default("")
+  category    String   @default("general") // registry, venue, vendor, inspiration, travel
+  icon        String   @default("Link")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  type        String   @default("info") // info, warning, success, reminder
+  read        Boolean  @default(false)
+  relatedTo   String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ImportedFile {
+  id          String   @id @default(cuid())
+  fileName    String
+  fileType    String   @default("") // docx, xlsx, pptx
+  content     String   @default("")
+  parsedData  String   @default("")
+  targetModule String  @default("") // guests, budget, tasks, etc.
+  createdAt   DateTime @default(now())
+}
