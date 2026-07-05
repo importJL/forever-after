@@ -466,7 +466,16 @@ export function GuestManager() {
                         <TableCell>
                           {guest.group || <span className="text-muted-foreground/50">—</span>}
                         </TableCell>
-                        <TableCell>{renderRsvpBadge(guest.rsvpStatus)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            {renderRsvpBadge(guest.rsvpStatus)}
+                            {guest.tableNumber > 0 && (
+                              <Badge className="text-[10px] h-5 px-1.5 py-0 bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800">
+                                🪑 T{guest.tableNumber}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           {guest.mealPreference || (
                             <span className="text-muted-foreground/50">—</span>
@@ -575,6 +584,11 @@ export function GuestManager() {
                     {/* Badges row */}
                     <div className="flex flex-wrap items-center gap-2">
                       {renderRsvpBadge(guest.rsvpStatus)}
+                      {guest.tableNumber > 0 && (
+                        <Badge className="text-[10px] h-5 px-1.5 py-0 bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800">
+                          🪑 Table {guest.tableNumber}
+                        </Badge>
+                      )}
                       {guest.role && guest.role !== 'guest' && (
                         <Badge variant="outline" className="capitalize text-xs">
                           {guest.role}

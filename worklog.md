@@ -190,6 +190,90 @@ All CRUD for: wedding, guests, budget (categories + expenses), tasks, vendors, t
 
 ---
 
+## Round 4: Seating Chart Complete Rewrite (Complete)
+
+### Task: Fix Seating Chart — free-form table placement, click-to-assign, drag-and-drop, RSVP+table display
+
+#### Changes to `seating-chart.tsx` (rewritten from 547 → 1130 lines)
+
+##### 1. Free-Form Floor Plan ✅ (NEW)
+- Large canvas-style floor plan area with dot-grid background
+- Tables are absolutely positioned within the floor plan
+- **Drag-to-move**: Grip handle (⠿) appears on hover at top of each table — drag to reposition anywhere
+- Tables clamped to floor plan boundaries
+- Auto-positions new tables in a 4-column grid layout
+- Positions persisted to `localStorage` (survives page reload)
+- "Reset" button clears all table positions
+
+##### 2. Table Creation ✅ (Improved)
+- Dialog with: Table Name (auto-numbered if blank), Capacity (1-20), Shape selector
+- Three table shapes: ⭕ Round, ⬜ Rectangle, 🥜 Oval
+- Each shape renders differently on the floor plan
+- Auto-incrementing table numbers (Table 1, Table 2, etc.)
+- Custom names supported (e.g. "Head Table", "Family Table")
+- 8 distinct color variations cycling across tables
+- Max 50 tables limit
+
+##### 3. Click Table → Assignment Panel ✅ (NEW)
+- Click any table on the floor plan to select it
+- Selected table highlighted with scale-up + ring
+- **Inline detail panel** appears below the floor plan with:
+  - Editable table name (click to rename inline)
+  - Capacity editor (number input)
+  - Shape selector (dropdown)
+  - **Seated guests** list with:
+    - Guest avatar (colored by RSVP), name, RSVP badge
+    - Unassign button (×) on each guest
+  - **Assign guest dropdown** with RSVP color indicators
+  - "Table is at full capacity" warning when full
+  - Hint text: "You can also drag guests from the pool below directly onto tables"
+- Delete table button (unassigns all guests first)
+
+##### 4. Drag-and-Drop Guest Assignment ✅ (NEW)
+- Guest pool at bottom shows all guests grouped by RSVP status
+- Each guest chip is **draggable** (cursor-grab)
+- Drag a guest chip onto any table in the floor plan
+- Visual feedback: tables highlight with rose ring on drag-over
+- Drag overlay shows guest name + avatar with rotation effect
+- On successful drop: auto-selects the table, shows toast notification
+- Capacity check prevents over-assignment
+
+##### 5. Guest Pool with RSVP Groups + Table Numbers ✅ (NEW)
+- All guests displayed in collapsible RSVP groups: Accepted, Pending, Declined, Maybe
+- Each group header shows: colored dot, label, count, seated count (🪑 N seated)
+- Guest chips show:
+  - Colored avatar circle (RSVP color), guest name
+  - **RSVP badge** (Accepted/Pending/Declined/Maybe) with colored dot
+  - **Table badge** (🪑 Table N) — shown when guest is assigned to a table
+  - Unassign button on hover
+- Dashed border for unassigned guests, solid border for assigned
+- 4-column responsive grid layout
+
+##### 6. Stats Row ✅ (NEW)
+- 4 stat cards: Tables (count), Total Seats (sum of capacities), Assigned (progress bar), Unassigned (count)
+- Each card has icon in colored container
+- Progress bar on "Assigned" card
+
+##### 7. Table Visual Improvements
+- Guest initials avatars positioned around table perimeter (colored by RSVP)
+- Capacity-based color coding (emerald → violet → amber → rose)
+- "Full" ring indicator on tables at capacity
+- Dot-grid background pattern on floor plan
+- Rose gradient radial glow on floor plan
+- Dark mode support throughout
+
+#### Changes to `guest-manager.tsx`
+- **Desktop table**: Table number badge (🪑 T1) displayed right beside RSVP status badge
+- **Mobile cards**: Table number badge (🪑 Table 1) displayed right beside RSVP status badge
+- Only shown when `guest.tableNumber > 0`
+
+#### Verification Results
+- **Lint**: 0 errors, 0 warnings ✅
+- **Dev Server**: Compiles and serves HTTP 200 ✅
+- **API Endpoints**: All return 200 ✅
+
+---
+
 ## Unresolved / Next Phase Priorities
 1. **Server stability in sandbox**: Process dies after ~10-20s due to memory limits — not a code issue
 2. **Google integration**: Google Docs/Sheets extraction returns "coming soon" — could use web-reader skill
@@ -202,5 +286,5 @@ All CRUD for: wedding, guests, budget (categories + expenses), tasks, vendors, t
 9. **Guest communication**: Email templates for RSVP reminders, save-the-dates
 10. **Budget alerts**: Proactive notifications when approaching budget limits
 11. **Photo upload**: Actual file upload to media gallery (currently URL-based)
-12. **Drag-and-drop**: ~~For task reordering~~ ✅ (Kanban board drag-and-drop done), seating chart guest assignment still pending
+12. **Drag-and-drop**: ~~For task reordering~~ ✅, ~~seating chart guest assignment~~ ✅
 13. **Wedding website**: Public-facing page for guests to RSVP online
