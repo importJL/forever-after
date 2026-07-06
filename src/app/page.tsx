@@ -232,87 +232,62 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
+  // Fetch all API endpoints and hydrate store
+  const fetchAllData = useCallback(async (signal?: AbortSignal) => {
+    const endpoints = [
+      '/api/wedding', '/api/guests', '/api/budget', '/api/tasks',
+      '/api/vendors', '/api/timeline', '/api/media', '/api/links', '/api/notifications',
+    ]
+    const results = await Promise.allSettled(
+      endpoints.map((url) => fetch(url, { signal }).then((r) => r.json()))
+    )
+    const store = useWeddingStore.getState()
+    const setters: Array<(data: unknown) => void> = [
+      (d: unknown) => d && store.setWedding(d as Parameters<typeof store.setWedding>[0]),
+      ...Array(8).fill(null).map((_, i) => {
+        const fns = [store.setGuests, store.setBudgetCategories, store.setTasks, store.setVendors, store.setTimelineEvents, store.setMediaItems, store.setWebLinks, store.setNotifications]
+        return (d: unknown) => Array.isArray(d) && fns[i](d)
+      }),
+    ]
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') setters[i](r.value)
+    })
+  }, [])
+
   // Load all data from API on mount
   useEffect(() => {
+    const controller = new AbortController()
     async function loadData() {
       try {
-        const endpoints = [
-          '/api/wedding',
-          '/api/guests',
-          '/api/budget',
-          '/api/tasks',
-          '/api/vendors',
-          '/api/timeline',
-          '/api/media',
-          '/api/links',
-          '/api/notifications',
-        ]
-        const results = await Promise.allSettled(
-          endpoints.map((url) => fetch(url).then((r) => r.json()))
-        )
-
-        const store = useWeddingStore.getState()
-
-        if (results[0].status === 'fulfilled' && results[0].value) {
-          store.setWedding(results[0].value)
-        }
-        if (results[1].status === 'fulfilled' && Array.isArray(results[1].value)) {
-          store.setGuests(results[1].value)
-        }
-        if (results[2].status === 'fulfilled' && Array.isArray(results[2].value)) {
-          store.setBudgetCategories(results[2].value)
-        }
-        if (results[3].status === 'fulfilled' && Array.isArray(results[3].value)) {
-          store.setTasks(results[3].value)
-        }
-        if (results[4].status === 'fulfilled' && Array.isArray(results[4].value)) {
-          store.setVendors(results[4].value)
-        }
-        if (results[5].status === 'fulfilled' && Array.isArray(results[5].value)) {
-          store.setTimelineEvents(results[5].value)
-        }
-        if (results[6].status === 'fulfilled' && Array.isArray(results[6].value)) {
-          store.setMediaItems(results[6].value)
-        }
-        if (results[7].status === 'fulfilled' && Array.isArray(results[7].value)) {
-          store.setWebLinks(results[7].value)
-        }
-        if (results[8].status === 'fulfilled' && Array.isArray(results[8].value)) {
-          store.setNotifications(results[8].value)
-        }
+        await fetchAllData(controller.signal)
       } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return
         console.error('Failed to load data:', e)
       } finally {
-        setIsLoaded(true)
+        if (!controller.signal.aborted) setIsLoaded(true)
       }
     }
     loadData()
-  }, [setIsLoaded])
+    return () => controller.abort()
+  }, [setIsLoaded, fetchAllData])
 
   // Load demo data
   const loadDemoData = useCallback(async () => {
     try {
       toast.loading('Loading demo data...', { id: 'demo' })
 
-      // Wedding info
       await fetch('/api/wedding', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          coupleName: 'Emma & James',
-          partner1: 'Emma',
-          partner2: 'James',
-          date: '2026-06-15',
-          venue: 'Rosewood Estate',
+          coupleName: 'Emma & James', partner1: 'Emma', partner2: 'James',
+          date: '2026-06-15', venue: 'Rosewood Estate',
           venueAddress: '123 Garden Lane, Napa Valley, CA',
-          theme: 'Garden Party',
-          guestCount: 120,
-          budgetTotal: 35000,
+          theme: 'Garden Party', guestCount: 120, budgetTotal: 35000,
           notes: 'Our dream outdoor wedding in Napa Valley!',
         }),
       })
 
-      // Guests
       const demoGuests = [
         { name: 'Sarah Johnson', email: 'sarah@email.com', phone: '555-0101', group: 'Family', rsvpStatus: 'accepted', mealPreference: 'Chicken', role: 'bridesmaid', plusOne: true, plusOneName: 'Mike Chen' },
         { name: 'David Wilson', email: 'david@email.com', phone: '555-0102', group: 'Family', rsvpStatus: 'accepted', mealPreference: 'Beef', role: 'groomsman' },
@@ -331,7 +306,6 @@ export default function Home() {
         await fetch('/api/guests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(g) })
       }
 
-      // Tasks
       const demoTasks = [
         { title: 'Book wedding venue', description: 'Confirm Rosewood Estate booking and pay deposit', category: 'Venue', priority: 'high', status: 'done', dueDate: '2025-09-01', assignee: 'Emma' },
         { title: 'Choose wedding photographer', description: 'Interview 3 photographers and select one', category: 'Photography', priority: 'high', status: 'done', dueDate: '2025-10-01', assignee: 'Emma' },
@@ -350,7 +324,6 @@ export default function Home() {
         await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) })
       }
 
-      // Vendors
       const demoVendors = [
         { name: 'Rosewood Estate', category: 'Venue', contactPerson: 'Victoria Hart', email: 'info@rosewood.com', phone: '555-1001', website: 'https://rosewood.com', price: 8000, depositPaid: 4000, status: 'confirmed', rating: 5, notes: 'Beautiful garden venue' },
         { name: 'Sweet Moments Bakery', category: 'Cake', contactPerson: 'Anna Lee', email: 'anna@sweetmoments.com', phone: '555-1002', website: '', price: 1200, depositPaid: 600, status: 'booked', rating: 4, notes: '3-tier floral cake' },
@@ -363,7 +336,6 @@ export default function Home() {
         await fetch('/api/vendors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) })
       }
 
-      // Timeline
       const demoTimeline = [
         { title: 'Getting Ready', description: 'Bridal party gets ready at the venue', startTime: '10:00', endTime: '12:00', location: 'Bridal Suite', category: 'other', sortOrder: 0 },
         { title: 'First Look', description: 'Private first look photos', startTime: '12:00', endTime: '12:30', location: 'Garden Gazebo', category: 'photos', sortOrder: 1 },
@@ -378,7 +350,6 @@ export default function Home() {
         await fetch('/api/timeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) })
       }
 
-      // Web Links
       const demoLinks = [
         { title: 'The Knot', url: 'https://www.theknot.com', description: 'Wedding planning resources', category: 'inspiration', icon: 'Heart' },
         { title: 'Amazon Registry', url: 'https://www.amazon.com/wedding', description: 'Our gift registry', category: 'registry', icon: 'Gift' },
@@ -389,7 +360,6 @@ export default function Home() {
         await fetch('/api/links', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(l) })
       }
 
-      // Notifications
       const demoNotifs = [
         { title: 'Welcome to ForeverAfter!', message: 'Start by setting up your wedding details in Settings.', type: 'info', relatedTo: 'dashboard' },
         { title: 'RSVP Reminder', message: '3 guests haven\'t responded yet. Consider sending a follow-up.', type: 'reminder', relatedTo: 'guests' },
@@ -400,25 +370,12 @@ export default function Home() {
         await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(n) })
       }
 
-      // Reload data
-      const endpoints = ['/api/wedding', '/api/guests', '/api/budget', '/api/tasks', '/api/vendors', '/api/timeline', '/api/media', '/api/links', '/api/notifications']
-      const results = await Promise.allSettled(endpoints.map(url => fetch(url).then(r => r.json())))
-      const store = useWeddingStore.getState()
-      if (results[0].status === 'fulfilled' && results[0].value) store.setWedding(results[0].value)
-      if (results[1].status === 'fulfilled' && Array.isArray(results[1].value)) store.setGuests(results[1].value)
-      if (results[2].status === 'fulfilled' && Array.isArray(results[2].value)) store.setBudgetCategories(results[2].value)
-      if (results[3].status === 'fulfilled' && Array.isArray(results[3].value)) store.setTasks(results[3].value)
-      if (results[4].status === 'fulfilled' && Array.isArray(results[4].value)) store.setVendors(results[4].value)
-      if (results[5].status === 'fulfilled' && Array.isArray(results[5].value)) store.setTimelineEvents(results[5].value)
-      if (results[6].status === 'fulfilled' && Array.isArray(results[6].value)) store.setMediaItems(results[6].value)
-      if (results[7].status === 'fulfilled' && Array.isArray(results[7].value)) store.setWebLinks(results[7].value)
-      if (results[8].status === 'fulfilled' && Array.isArray(results[8].value)) store.setNotifications(results[8].value)
-
+      await fetchAllData()
       toast.success('Demo data loaded!', { id: 'demo', description: 'Explore the app with sample wedding data' })
     } catch (e) {
       toast.error('Failed to load demo data', { id: 'demo' })
     }
-  }, [])
+  }, [fetchAllData])
 
   const renderView = () => {
     switch (activeView) {

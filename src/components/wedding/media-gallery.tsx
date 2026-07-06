@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useMemo, useRef } from 'react'
+import React, { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Image as ImageIcon,
@@ -24,7 +24,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog,
   DialogContent,
@@ -99,10 +98,12 @@ const emptyForm: MediaFormData = {
 }
 
 export function MediaGallery() {
-  const { mediaItems, setMediaItems, addMediaItem, updateMediaItem, deleteMediaItem } =
-    useWeddingStore()
+  const mediaItems = useWeddingStore((s) => s.mediaItems)
+  const setMediaItems = useWeddingStore((s) => s.setMediaItems)
+  const addMediaItem = useWeddingStore((s) => s.addMediaItem)
+  const updateMediaItem = useWeddingStore((s) => s.updateMediaItem)
+  const deleteMediaItem = useWeddingStore((s) => s.deleteMediaItem)
 
-  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<MediaItem | null>(null)
@@ -110,27 +111,6 @@ export function MediaGallery() {
   const [submitting, setSubmitting] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set())
-
-
-
-  // Fetch media items
-  useEffect(() => {
-    async function fetchMedia() {
-      try {
-        setLoading(true)
-        const res = await fetch('/api/media')
-        if (res.ok) {
-          const data = await res.json()
-          setMediaItems(data)
-        }
-      } catch {
-        toast.error('Failed to load media')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchMedia()
-  }, [setMediaItems])
 
   // Filtered items
   const filteredItems = useMemo(() => {
@@ -238,6 +218,8 @@ export function MediaGallery() {
           <img
             src={thumbnailUrl}
             alt={item.title}
+            width={400}
+            height={300}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => handleImageError(item.id)}
           />
@@ -247,12 +229,14 @@ export function MediaGallery() {
 
     if (item.type === 'video') {
       return (
-        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-lg bg-gradient-to-br from-amber-100 to-rose-100 dark:from-amber-950/40 dark:to-rose-950/40 flex items-center justify-center">
+        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-lg bg-gradient-to-br from-amber-100 to-rose-100 dark:from-amber-950/40 dark:to-amber-950/40 flex items-center justify-center">
           {thumbnailUrl && !imageErrors.has(item.id) ? (
             <>
               <img
                 src={thumbnailUrl}
                 alt={item.title}
+                width={400}
+                height={300}
                 className="h-full w-full object-cover"
                 onError={() => handleImageError(item.id)}
               />
@@ -286,28 +270,6 @@ export function MediaGallery() {
     return (
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-lg bg-gradient-to-br from-rose-100 to-amber-100 dark:from-rose-950/40 dark:to-amber-950/40 flex items-center justify-center">
         <Sparkles className="h-10 w-10 text-rose-400 dark:text-rose-300" />
-      </div>
-    )
-  }
-
-  // Loading skeleton grid
-  if (loading) {
-    return (
-      <div className="space-y-6 p-4 sm:p-6">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-9 w-32" />
-        </div>
-        <Skeleton className="h-9 w-80" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="space-y-3">
-              <Skeleton className="aspect-[4/3] w-full rounded-lg" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-5 w-20" />
-            </div>
-          ))}
-        </div>
       </div>
     )
   }

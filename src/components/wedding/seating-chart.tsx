@@ -31,6 +31,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -54,6 +64,10 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
+
+function generateId(): string {
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface TablePosition {
@@ -233,7 +247,7 @@ function FloorTableStandalone({
       animate={{ scale: 1, opacity: 1 }}
       transition={{ duration: 0.3, delay: index * 0.03 }}
       className="absolute"
-      style={{ left: table.x, top: table.y, zIndex: isSelected ? 30 : 10 }}
+      style={{ left: table.x, top: table.y, zIndex: isSelected ? 30 : 10 + index }}
       onMouseDown={(e) => onMouseDown(e, table.id)}
       onClick={(e) => {
         const t = e.target as HTMLElement
@@ -373,7 +387,20 @@ export function SeatingChart() {
     if (typeof window === 'undefined') return null
     try {
       const saved = localStorage.getItem('seating-table-positions')
-      return saved ? JSON.parse(saved) as TablePosition[] : null
+      if (!saved) return null
+      const parsed = JSON.parse(saved)
+      if (!Array.isArray(parsed)) return null
+      const valid = parsed.filter(
+        (t: unknown) =>
+          t &&
+          typeof (t as TablePosition).id === 'string' &&
+          typeof (t as TablePosition).number === 'number' &&
+          typeof (t as TablePosition).capacity === 'number' &&
+          typeof (t as TablePosition).x === 'number' &&
+          typeof (t as TablePosition).y === 'number' &&
+          typeof (t as TablePosition).label === 'string'
+      )
+      return valid.length > 0 ? valid as TablePosition[] : null
     } catch { return null }
   })
   const [tablePositions, setTablePositions] = useState<TablePosition[]>(initialPositions ?? [])
@@ -394,6 +421,7 @@ export function SeatingChart() {
   const [activeDragGuest, setActiveDragGuest] = useState<DragGuestData | null>(null)
   const [rsvpGroupOpen, setRsvpGroupOpen] = useState<Set<string>>(new Set(['accepted', 'pending', 'declined', 'maybe']))
   const [editingTableId, setEditingTableId] = useState<string | null>(null)
+  const [deleteConfirmTableId, setDeleteConfirmTableId] = useState<{ id: string; number: number } | null>(null)
 
   // Drag sensors
   const sensors = useSensors(
@@ -482,7 +510,7 @@ export function SeatingChart() {
     const y = 60 + row * 280
 
     const newTable: TablePosition = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       number: nextNum,
       capacity: cap,
       shape: newTableShape,
@@ -499,17 +527,26 @@ export function SeatingChart() {
     toast.success(`${label} added`)
   }, [newTableName, newTableCapacity, newTableShape, allTableNumbers])
 
-  const handleDeleteTable = useCallback(
+  const confirmDeleteTable = useCallback(
     (tableId: string, tableNumber: number) => {
-      const tableGuests = guestsByTable.get(tableNumber) ?? []
+      setDeleteConfirmTableId({ id: tableId, number: tableNumber })
+    },
+    [],
+  )
+
+  const handleDeleteTable = useCallback(
+    () => {
+      if (!deleteConfirmTableId) return
+      const tableGuests = guestsByTable.get(deleteConfirmTableId.number) ?? []
       for (const g of tableGuests) {
         updateGuest(g.id, { tableNumber: 0, seatNumber: 0 })
       }
-      setTablePositions((prev) => prev.filter((t) => t.id !== tableId))
-      if (selectedTableId === tableId) setSelectedTableId(null)
+      setTablePositions((prev) => prev.filter((t) => t.id !== deleteConfirmTableId.id))
+      if (selectedTableId === deleteConfirmTableId.id) setSelectedTableId(null)
+      setDeleteConfirmTableId(null)
       toast.success(`Table deleted. ${tableGuests.length} guest(s) unassigned.`)
     },
-    [guestsByTable, updateGuest, selectedTableId],
+    [deleteConfirmTableId, guestsByTable, updateGuest, selectedTableId],
   )
 
   const handleUpdateTable = useCallback(
@@ -606,16 +643,18 @@ export function SeatingChart() {
   }, [])
 
   // ── Table dragging (free-form placement) ──────────────────────────────
-  const dragTableInfo = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null)
+  const dragTableInfo = useRef<{ id: string; offsetX: number; offsetY: number; isTouch: boolean } | null>(null)
+  const dragThrottleRef = useRef<number | null>(null)
 
-  const handleTableMouseDown = useCallback(
-    (e: React.MouseEvent, tableId: string) => {
-      // Only start drag from the grip handle
-      const target = e.target as HTMLElement
-      if (!target.closest('[data-table-grip]')) return
-      e.preventDefault()
-      e.stopPropagation()
+  const getClientPos = (e: MouseEvent | TouchEvent) => {
+    if ('touches' in e) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+    return { x: e.clientX, y: e.clientY }
+  }
 
+  const handleTableDragStart = useCallback(
+    (clientX: number, clientY: number, tableId: string) => {
       const table = tablePositions.find((t) => t.id === tableId)
       if (!table) return
 
@@ -625,17 +664,27 @@ export function SeatingChart() {
       const rect = floorPlan.getBoundingClientRect()
       dragTableInfo.current = {
         id: tableId,
-        offsetX: e.clientX - rect.left - table.x,
-        offsetY: e.clientY - rect.top - table.y,
+        offsetX: clientX - rect.left - table.x,
+        offsetY: clientY - rect.top - table.y,
+        isTouch: false,
       }
+    },
+    [tablePositions],
+  )
 
-      const handleMouseMove = (moveE: MouseEvent) => {
-        if (!dragTableInfo.current || !floorPlan) return
+  const handleTableMove = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!dragTableInfo.current) return
+      const floorPlan = floorPlanRef.current
+      if (!floorPlan) return
+
+      if (dragThrottleRef.current) return
+      dragThrottleRef.current = window.requestAnimationFrame(() => {
+        dragThrottleRef.current = null
         const fpRect = floorPlan.getBoundingClientRect()
-        let newX = moveE.clientX - fpRect.left - dragTableInfo.current.offsetX
-        let newY = moveE.clientY - fpRect.top - dragTableInfo.current.offsetY
+        let newX = clientX - fpRect.left - dragTableInfo.current!.offsetX
+        let newY = clientY - fpRect.top - dragTableInfo.current!.offsetY
 
-        // Clamp to floor plan bounds
         newX = Math.max(0, Math.min(newX, fpRect.width - 80))
         newY = Math.max(0, Math.min(newY, fpRect.height - 80))
 
@@ -644,18 +693,54 @@ export function SeatingChart() {
             t.id === dragTableInfo.current!.id ? { ...t, x: newX, y: newY } : t,
           ),
         )
-      }
-
-      const handleMouseUp = () => {
-        dragTableInfo.current = null
-        document.removeEventListener('mousemove', handleMouseMove)
-        document.removeEventListener('mouseup', handleMouseUp)
-      }
-
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
+      })
     },
-    [tablePositions],
+    [],
+  )
+
+  const handleTableDragEnd = useCallback(() => {
+    dragTableInfo.current = null
+    if (dragThrottleRef.current) {
+      cancelAnimationFrame(dragThrottleRef.current)
+      dragThrottleRef.current = null
+    }
+  }, [])
+
+  const handleTablePointerDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent, tableId: string) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-table-grip]')) return
+      e.preventDefault()
+      e.stopPropagation()
+
+      const clientPos = 'touches' in e
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: e.clientX, y: e.clientY }
+
+      if ('touches' in e) {
+        dragTableInfo.current = { id: tableId, offsetX: 0, offsetY: 0, isTouch: true }
+      }
+      handleTableDragStart(clientPos.x, clientPos.y, tableId)
+
+      const onMove = (moveE: MouseEvent | TouchEvent) => {
+        const pos = getClientPos(moveE)
+        handleTableMove(pos.x, pos.y)
+      }
+
+      const onUp = () => {
+        handleTableDragEnd()
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        document.removeEventListener('touchmove', onMove)
+        document.removeEventListener('touchend', onUp)
+      }
+
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+      document.addEventListener('touchmove', onMove, { passive: true })
+      document.addEventListener('touchend', onUp)
+    },
+    [handleTableDragStart, handleTableMove, handleTableDragEnd],
   )
 
   // ── Guest DnD ─────────────────────────────────────────────────────────
@@ -864,13 +949,14 @@ export function SeatingChart() {
                     dragOverTableId={dragOverTableId}
                     selectedTableId={selectedTableId}
                     onSelect={handleSelectTable}
-                    onDelete={handleDeleteTable}
+                    onDelete={confirmDeleteTable}
                     onStartEdit={(id, capacity, label) => {
                       setEditingTableId(id)
                       setEditCapacity(String(capacity))
                       setEditLabel(label)
                     }}
-                    onMouseDown={handleTableMouseDown}
+                    onMouseDown={(e) => handleTablePointerDown(e, table.id)}
+                    onTouchStart={(e) => handleTablePointerDown(e, table.id)}
                   />
                 ))}
                 {/* Extendable area */}
@@ -1025,7 +1111,7 @@ export function SeatingChart() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteTable(selectedTable.id, selectedTable.number)}
+                        onClick={() => confirmDeleteTable(selectedTable.id, selectedTable.number)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -1245,10 +1331,28 @@ export function SeatingChart() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Table Confirmation */}
+        <AlertDialog open={!!deleteConfirmTableId} onOpenChange={() => setDeleteConfirmTableId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Table</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this table? All guests seated here will be unassigned.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteTable} className="bg-destructive text-white hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </motion.div>
 
       {/* Drag Overlay */}
-      <DragOverlay dropAnimation={null}>
+      <DragOverlay dropAnimation={{ duration: 200, easing: 'ease-out' }}>
         {activeDragGuest ? (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border-2 border-rose-300 dark:border-rose-700 shadow-xl rotate-2 opacity-90">
             <div className={cn('h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white', RSVP_CONFIG[activeDragGuest.guest.rsvpStatus].dotClass)}>

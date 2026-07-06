@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   Card,
@@ -18,6 +18,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 import {
   Select,
   SelectTrigger,
@@ -110,15 +120,12 @@ const SEED_CATEGORIES = [
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function BudgetTracker() {
-  const {
-    budgetCategories,
-    setBudgetCategories,
-    addBudgetCategory,
-    updateBudgetCategory,
-    deleteBudgetCategory,
-  } = useWeddingStore()
+  const budgetCategories = useWeddingStore((s) => s.budgetCategories)
+  const setBudgetCategories = useWeddingStore((s) => s.setBudgetCategories)
+  const addBudgetCategory = useWeddingStore((s) => s.addBudgetCategory)
+  const updateBudgetCategory = useWeddingStore((s) => s.updateBudgetCategory)
+  const deleteBudgetCategory = useWeddingStore((s) => s.deleteBudgetCategory)
 
-  const [loading, setLoading] = useState(true)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   // Category dialog state
@@ -144,16 +151,21 @@ export function BudgetTracker() {
     notes: '',
   })
 
+  // ── Delete confirmation state ─────────────────────────────────────────
+  const [deleteConfirmCatId, setDeleteConfirmCatId] = useState<string | null>(null)
+  const [deleteConfirmExp, setDeleteConfirmExp] = useState<{ catId: string; expId: string } | null>(null)
+
   // ── Data fetching ──────────────────────────────────────────────────────────
 
-  const fetchCategories = useCallback(async () => {
+  const fetchCategories = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/budget')
+      const res = await fetch('/api/budget', { signal })
       if (res.ok) {
         const data = await res.json()
         setBudgetCategories(data)
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       toast.error('Failed to load budget data')
     }
   }, [setBudgetCategories])
@@ -165,14 +177,12 @@ export function BudgetTracker() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: crypto.randomUUID(),
             name: cat.name,
             icon: cat.icon,
             budgeted: cat.budgeted,
             spent: 0,
             color: cat.color,
             sortOrder: SEED_CATEGORIES.indexOf(cat),
-            expenses: [],
           }),
         })
       }
@@ -183,21 +193,7 @@ export function BudgetTracker() {
     }
   }, [fetchCategories])
 
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true)
-      await fetchCategories()
-      setLoading(false)
-    }
-    init()
-  }, [fetchCategories])
 
-  useEffect(() => {
-    if (!loading && budgetCategories.length === 0) {
-      seedDefaults()
-    }
-    // Only run when loading transitions to false and categories are empty
-  }, [loading])
 
   // ── Category CRUD ──────────────────────────────────────────────────────────
 
@@ -249,20 +245,17 @@ export function BudgetTracker() {
           toast.error('Failed to update category')
         }
       } else {
-        const newCat = {
-          id: crypto.randomUUID(),
-          name: catForm.name.trim(),
-          icon: catForm.icon.trim(),
-          budgeted,
-          spent: 0,
-          color: catForm.color,
-          sortOrder: budgetCategories.length,
-          expenses: [],
-        }
         const res = await fetch('/api/budget', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newCat),
+          body: JSON.stringify({
+            name: catForm.name.trim(),
+            icon: catForm.icon.trim(),
+            budgeted,
+            spent: 0,
+            color: catForm.color,
+            sortOrder: budgetCategories.length,
+          }),
         })
         if (res.ok) {
           const created = await res.json()
@@ -278,14 +271,15 @@ export function BudgetTracker() {
     }
   }
 
-  async function handleDeleteCategory(catId: string) {
+  async function handleDeleteCategory() {
+    if (!deleteConfirmCatId) return
     try {
-      const res = await fetch(`/api/budget/${catId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/budget/${deleteConfirmCatId}`, { method: 'DELETE' })
       if (res.ok) {
-        deleteBudgetCategory(catId)
+        deleteBudgetCategory(deleteConfirmCatId)
         setExpandedIds((prev) => {
           const next = new Set(prev)
-          next.delete(catId)
+          next.delete(deleteConfirmCatId)
           return next
         })
         toast.success('Category deleted')
@@ -294,6 +288,8 @@ export function BudgetTracker() {
       }
     } catch {
       toast.error('An error occurred deleting the category')
+    } finally {
+      setDeleteConfirmCatId(null)
     }
   }
 
@@ -362,20 +358,17 @@ export function BudgetTracker() {
           toast.error('Failed to update expense')
         }
       } else {
-        const newExp = {
-          id: crypto.randomUUID(),
-          categoryId: expCatId,
-          description: expForm.description.trim(),
-          amount,
-          date: expForm.date,
-          vendor: expForm.vendor.trim(),
-          paid: expForm.paid,
-          notes: expForm.notes.trim(),
-        }
         const res = await fetch(`/api/budget/${expCatId}/expenses`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newExp),
+          body: JSON.stringify({
+            description: expForm.description.trim(),
+            amount,
+            date: expForm.date,
+            vendor: expForm.vendor.trim(),
+            paid: expForm.paid,
+            notes: expForm.notes.trim(),
+          }),
         })
         if (res.ok) {
           toast.success('Expense added')
@@ -390,10 +383,11 @@ export function BudgetTracker() {
     }
   }
 
-  async function handleDeleteExpense(catId: string, expenseId: string) {
+  async function handleDeleteExpense() {
+    if (!deleteConfirmExp) return
     try {
       const res = await fetch(
-        `/api/budget/${catId}/expenses/${expenseId}`,
+        `/api/budget/${deleteConfirmExp.catId}/expenses/${deleteConfirmExp.expId}`,
         { method: 'DELETE' }
       )
       if (res.ok) {
@@ -404,6 +398,8 @@ export function BudgetTracker() {
       }
     } catch {
       toast.error('An error occurred deleting the expense')
+    } finally {
+      setDeleteConfirmExp(null)
     }
   }
 
@@ -446,14 +442,6 @@ export function BudgetTracker() {
   }))
 
   // ── Render ─────────────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">
@@ -557,8 +545,8 @@ export function BudgetTracker() {
                         dataKey="value"
                         nameKey="name"
                       >
-                        {pieData.map((entry, index) => (
-                          <Cell key={index} fill={entry.color} />
+                        {pieData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name]} />
@@ -626,7 +614,10 @@ export function BudgetTracker() {
             <CardContent className="py-12 text-center text-muted-foreground">
               <Receipt className="mx-auto mb-2 h-8 w-8 opacity-50" />
               <p>No budget categories yet.</p>
-              <p className="text-sm">Click &quot;Add Category&quot; to get started.</p>
+              <p className="text-sm">Click &quot;Add Category&quot; to get started or use defaults.</p>
+              <Button variant="outline" size="sm" className="mt-4" onClick={seedDefaults}>
+                Initialize with Default Categories
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -657,7 +648,7 @@ export function BudgetTracker() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-rose-500 hover:text-rose-600"
-                            onClick={() => handleDeleteCategory(cat.id)}
+                            onClick={() => setDeleteConfirmCatId(cat.id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -786,7 +777,7 @@ export function BudgetTracker() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 text-rose-500 hover:text-rose-600"
-                                    onClick={() => handleDeleteExpense(cat.id, exp.id)}
+                                    onClick={() => setDeleteConfirmExp({ catId: cat.id, expId: exp.id })}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
@@ -980,6 +971,42 @@ export function BudgetTracker() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Delete Category Confirmation ─────────────────────────────────── */}
+      <AlertDialog open={!!deleteConfirmCatId} onOpenChange={() => setDeleteConfirmCatId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this budget category? All associated expenses will also be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive text-white hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Delete Expense Confirmation ──────────────────────────────────── */}
+      <AlertDialog open={!!deleteConfirmExp} onOpenChange={() => setDeleteConfirmExp(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Expense</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this expense? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteExpense} className="bg-destructive text-white hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

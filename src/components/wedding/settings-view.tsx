@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -101,76 +101,41 @@ function FormFieldGroup({
 }
 
 export function SettingsView() {
-  const { wedding, setWedding, setActiveView } = useWeddingStore()
-  const [formData, setFormData] = useState<WeddingFormData>(initialFormData)
-  const [loading, setLoading] = useState(true)
+  const wedding = useWeddingStore((s) => s.wedding)
+  const setWedding = useWeddingStore((s) => s.setWedding)
+  const setActiveView = useWeddingStore((s) => s.setActiveView)
+  const [formData, setFormData] = useState<WeddingFormData>(() => ({
+    partner1: wedding.partner1 || '',
+    partner2: wedding.partner2 || '',
+    date: wedding.date ? wedding.date.split('T')[0] : '',
+    venue: wedding.venue || '',
+    venueAddress: wedding.venueAddress || '',
+    theme: wedding.theme || 'Classic Elegance',
+    guestCount: String(wedding.guestCount || 0),
+    budgetTotal: String(wedding.budgetTotal || 0),
+    notes: wedding.notes || '',
+  }))
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
 
-  // Fetch wedding data on mount
-  const fetchWeddingData = useCallback(async () => {
-    try {
-      setLoading(true)
-      const res = await fetch('/api/wedding')
-      if (res.ok) {
-        const data = await res.json()
-        if (data) {
-          // Update both store and form
-          setWedding({
-            id: data.id || wedding.id,
-            coupleName: data.coupleName || '',
-            partner1: data.partner1 || '',
-            partner2: data.partner2 || '',
-            date: data.date || '',
-            venue: data.venue || '',
-            venueAddress: data.venueAddress || '',
-            theme: data.theme || 'Classic Elegance',
-            guestCount: data.guestCount || 0,
-            budgetTotal: data.budgetTotal || 0,
-            notes: data.notes || '',
-          })
-
-          setFormData({
-            partner1: data.partner1 || '',
-            partner2: data.partner2 || '',
-            date: data.date ? data.date.split('T')[0] : '',
-            venue: data.venue || '',
-            venueAddress: data.venueAddress || '',
-            theme: data.theme || 'Classic Elegance',
-            guestCount: String(data.guestCount || 0),
-            budgetTotal: String(data.budgetTotal || 0),
-            notes: data.notes || '',
-          })
-        }
-      }
-    } catch {
-      // Populate from store as fallback
-      setFormData({
-        partner1: wedding.partner1 || '',
-        partner2: wedding.partner2 || '',
-        date: wedding.date ? wedding.date.split('T')[0] : '',
-        venue: wedding.venue || '',
-        venueAddress: wedding.venueAddress || '',
-        theme: wedding.theme || 'Classic Elegance',
-        guestCount: String(wedding.guestCount || 0),
-        budgetTotal: String(wedding.budgetTotal || 0),
-        notes: wedding.notes || '',
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [wedding, setWedding])
-
+  // Track changes — compare formData against stored wedding data
   useEffect(() => {
-    fetchWeddingData()
-  }, [])
-
-  // Track changes
-  useEffect(() => {
-    if (!loading) {
-      setHasChanges(true)
+    const stored: WeddingFormData = {
+      partner1: wedding.partner1 || '',
+      partner2: wedding.partner2 || '',
+      date: wedding.date ? wedding.date.split('T')[0] : '',
+      venue: wedding.venue || '',
+      venueAddress: wedding.venueAddress || '',
+      theme: wedding.theme || 'Classic Elegance',
+      guestCount: String(wedding.guestCount || 0),
+      budgetTotal: String(wedding.budgetTotal || 0),
+      notes: wedding.notes || '',
     }
-  }, [formData, loading])
+    const changed = (Object.keys(stored) as (keyof WeddingFormData)[]).some(
+      (key) => stored[key] !== formData[key]
+    )
+    setHasChanges(changed)
+  }, [formData, wedding])
 
   const handleChange = (field: keyof WeddingFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -238,17 +203,6 @@ export function SettingsView() {
     })
     setHasChanges(false)
     toast.info('Changes discarded')
-  }
-
-  if (loading) {
-    return (
-      <div className="p-4 sm:p-6 lg:p-8">
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <Loader2 className="w-8 h-8 text-rose-500 animate-spin" />
-          <p className="text-muted-foreground text-sm">Loading wedding details...</p>
-        </div>
-      </div>
-    )
   }
 
   return (

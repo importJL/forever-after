@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,6 +14,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 import {
   Select,
   SelectTrigger,
@@ -32,7 +42,7 @@ import {
 } from '@/components/ui/toggle-group'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
-import type { Task } from '@/lib/store'
+import { useWeddingStore, type Task } from '@/lib/store'
 import {
   DndContext,
   DragOverlay,
@@ -262,7 +272,7 @@ function KanbanColumn({ status, tasks, onEdit, onDelete, onToggleDone }: {
           <Badge variant="secondary" className="h-5 min-w-[20px] text-[10px] px-1.5">{tasks.length}</Badge>
         </div>
       </div>
-      <ScrollArea className="flex-1 max-h-[calc(100vh-380px)]">
+      <ScrollArea className="flex-1 max-h-[60vh]">
         <div ref={setNodeRef} className="p-2 space-y-2 min-h-[60px]">
           <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
             <AnimatePresence mode="popLayout">
@@ -284,8 +294,11 @@ function KanbanColumn({ status, tasks, onEdit, onDelete, onToggleDone }: {
 
 /* ─────────── Main Component ─────────── */
 export function TaskChecklist() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
+  const tasks = useWeddingStore((s) => s.tasks)
+  const setTasks = useWeddingStore((s) => s.setTasks)
+  const addTask = useWeddingStore((s) => s.addTask)
+  const updateTask = useWeddingStore((s) => s.updateTask)
+  const deleteTask = useWeddingStore((s) => s.deleteTask)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
@@ -298,29 +311,12 @@ export function TaskChecklist() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
   const [openCategories, setOpenCategories] = useState<Set<string>>(new Set(TASK_CATEGORIES))
   const [timelineMonth, setTimelineMonth] = useState(new Date())
+  const [deleteConfirmTask, setDeleteConfirmTask] = useState<Task | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor),
   )
-
-  useEffect(() => {
-    fetchTasks()
-  }, [])
-
-  const fetchTasks = async () => {
-    try {
-      const res = await fetch('/api/tasks')
-      if (res.ok) {
-        const data = await res.json()
-        setTasks(data)
-      }
-    } catch {
-      toast.error('Failed to load tasks')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
@@ -386,20 +382,21 @@ export function TaskChecklist() {
     const task = tasks.find((t) => t.id === taskId)
     if (!task) return
 
-    // Determine target status
     let targetStatus = task.status
+    let overTaskId: string | null = null
 
-    // If dropped on a column
     if (STATUS_GROUPS.some((g) => g.key === String(over.id))) {
       targetStatus = String(over.id) as Task['status']
-    }
-    // If dropped on another task, use that task's status
-    else {
+    } else {
       const overTask = tasks.find((t) => t.id === String(over.id))
-      if (overTask) targetStatus = overTask.status
+      if (overTask) {
+        targetStatus = overTask.status
+        overTaskId = overTask.id
+      }
     }
 
-    if (targetStatus !== task.status) {
+    const sameStatus = targetStatus === task.status
+    if (!sameStatus) {
       try {
         const res = await fetch(`/api/tasks/${task.id}`, {
           method: 'PUT',
@@ -408,12 +405,51 @@ export function TaskChecklist() {
         })
         if (res.ok) {
           const updated = await res.json()
-          setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
-          toast.success(`Moved to ${STATUS_GROUPS.find((g) => g.key === targetStatus)?.label}`)
+          updateTask(updated.id, updated)
         }
       } catch {
         toast.error('Failed to move task')
+        return
       }
+    }
+
+    // Reorder within the column
+    if (overTaskId || sameStatus) {
+      const columnTasks = [...tasks.filter((t) => t.status === targetStatus)]
+      const oldIndex = columnTasks.findIndex((t) => t.id === taskId)
+      const newIndex = overTaskId
+        ? columnTasks.findIndex((t) => t.id === overTaskId)
+        : columnTasks.length - 1
+      if (oldIndex === -1 || newIndex === -1) return
+
+      const [moved] = columnTasks.splice(oldIndex, 1)
+      columnTasks.splice(newIndex, 0, moved)
+      const reordered = columnTasks.map((t, i) => ({ ...t, sortOrder: i }))
+
+      const snapshot = [...tasks]
+      const store = useWeddingStore.getState()
+      const other = store.tasks.filter((t) => t.status !== targetStatus)
+      store.setTasks([...other, ...reordered])
+
+      try {
+        await Promise.all(
+          reordered.map((t) =>
+            fetch(`/api/tasks/${t.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sortOrder: t.sortOrder }),
+            })
+          )
+        )
+      } catch {
+        store.setTasks(snapshot)
+        toast.error('Failed to save reorder')
+        return
+      }
+    }
+
+    if (!sameStatus) {
+      toast.success(`Moved to ${STATUS_GROUPS.find((g) => g.key === targetStatus)?.label}`)
     }
   }
 
@@ -449,18 +485,18 @@ export function TaskChecklist() {
         })
         if (res.ok) {
           const updated = await res.json()
-          setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+          updateTask(updated.id, updated)
           toast.success('Task updated')
         } else toast.error('Failed to update task')
       } else {
         const res = await fetch('/api/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...formData, id: crypto.randomUUID(), sortOrder: tasks.length }),
+          body: JSON.stringify({ ...formData, sortOrder: tasks.length }),
         })
         if (res.ok) {
           const created = await res.json()
-          setTasks((prev) => [...prev, created])
+          addTask(created)
           toast.success('Task added')
         } else toast.error('Failed to add task')
       }
@@ -468,16 +504,19 @@ export function TaskChecklist() {
     } catch { toast.error('Something went wrong') }
   }
 
-  const handleDelete = async (task: Task) => {
-    if (!window.confirm(`Delete "${task.title}"?`)) return
+  const handleDelete = async () => {
+    if (!deleteConfirmTask) return
     try {
-      const res = await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/tasks/${deleteConfirmTask.id}`, { method: 'DELETE' })
       if (res.ok) {
-        setTasks((prev) => prev.filter((t) => t.id !== task.id))
+        deleteTask(deleteConfirmTask.id)
         toast.success('Task deleted')
       } else toast.error('Failed to delete task')
     } catch { toast.error('Something went wrong') }
+    finally { setDeleteConfirmTask(null) }
   }
+
+  const confirmDelete = (task: Task) => setDeleteConfirmTask(task)
 
   const toggleDone = async (task: Task) => {
     const newStatus = task.status === 'done' ? 'todo' : 'done'
@@ -489,7 +528,7 @@ export function TaskChecklist() {
       })
       if (res.ok) {
         const updated = await res.json()
-        setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+        updateTask(updated.id, updated)
         toast.success(newStatus === 'done' ? 'Task completed!' : 'Task reopened')
       }
     } catch { toast.error('Failed to update task') }
@@ -507,14 +546,6 @@ export function TaskChecklist() {
     const cats = new Set(tasks.map((t) => t.category))
     return Array.from(cats).sort()
   }, [tasks])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader className="h-8 w-8 animate-spin text-rose-500" />
-      </div>
-    )
-  }
 
   const activeDragTask = tasks.find((t) => t.id === activeDragId)
 
@@ -772,7 +803,7 @@ export function TaskChecklist() {
                                 </div>
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(task)}><Edit className="h-3.5 w-3.5" /></Button>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => handleDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => confirmDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
                                 </div>
                               </div>
                             </CardContent>
@@ -797,7 +828,7 @@ export function TaskChecklist() {
                       status={group}
                       tasks={groupedByStatus[group.key]}
                       onEdit={openEditDialog}
-                      onDelete={handleDelete}
+                      onDelete={confirmDelete}
                       onToggleDone={toggleDone}
                     />
                   ))}
@@ -1026,7 +1057,7 @@ export function TaskChecklist() {
                                         </div>
                                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(task)}><Edit className="h-3.5 w-3.5" /></Button>
-                                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => handleDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => confirmDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
                                         </div>
                                       </div>
                                     </CardContent>
@@ -1046,7 +1077,7 @@ export function TaskChecklist() {
         </AnimatePresence>
 
         {/* Empty state */}
-        {filteredTasks.length === 0 && !loading && (
+        {filteredTasks.length === 0 && (
           <div className="text-center py-16">
             <ListChecks className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400">No tasks found</h3>
@@ -1139,6 +1170,24 @@ export function TaskChecklist() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation */}
+        <AlertDialog open={!!deleteConfirmTask} onOpenChange={() => setDeleteConfirmTask(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Task</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete &quot;{deleteConfirmTask?.title}&quot;? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   )

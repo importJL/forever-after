@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -30,6 +30,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 import {
   Select,
   SelectTrigger,
@@ -146,25 +156,7 @@ export function WebLinks() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<LinkFormData>(EMPTY_FORM)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  // ── Data fetch ───────────────────────────────────────────────────────────
-  useEffect(() => {
-    async function fetchLinks() {
-      try {
-        const res = await fetch('/api/links')
-        if (res.ok) {
-          const data = await res.json()
-          if (Array.isArray(data)) setWebLinks(data)
-        }
-      } catch {
-        // Use store data as fallback
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchLinks()
-  }, [setWebLinks])
+  const [deleteConfirmLinkId, setDeleteConfirmLinkId] = useState<string | null>(null)
 
   // ── Filtered links ───────────────────────────────────────────────────────
   const filteredLinks = useMemo(() => {
@@ -234,13 +226,10 @@ export function WebLinks() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: crypto.randomUUID(),
             title: form.title.trim(),
             url,
             description: form.description.trim(),
             category: form.category,
-            icon: '',
-            sortOrder: 0,
           }),
         })
         if (!res.ok) throw new Error('Failed to add link')
@@ -257,17 +246,20 @@ export function WebLinks() {
   }, [form, editingId, addWebLink, updateWebLink])
 
   const handleDelete = useCallback(
-    async (id: string) => {
+    async () => {
+      if (!deleteConfirmLinkId) return
       try {
-        const res = await fetch(`/api/links/${id}`, { method: 'DELETE' })
+        const res = await fetch(`/api/links/${deleteConfirmLinkId}`, { method: 'DELETE' })
         if (!res.ok) throw new Error('Failed to delete link')
-        deleteWebLink(id)
+        deleteWebLink(deleteConfirmLinkId)
         toast.success('Link deleted.')
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to delete')
+      } finally {
+        setDeleteConfirmLinkId(null)
       }
     },
-    [deleteWebLink],
+    [deleteConfirmLinkId, deleteWebLink],
   )
 
   const handleOpenLink = useCallback((url: string) => {
@@ -303,14 +295,6 @@ export function WebLinks() {
   }
 
   // ── Render ──────────────────────────────────────────────────────────────
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="h-8 w-8 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin" />
-      </div>
-    )
-  }
-
   return (
     <motion.div
       className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto"
@@ -461,7 +445,7 @@ export function WebLinks() {
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => handleDelete(link.id)}
+                                onClick={() => setDeleteConfirmLinkId(link.id)}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -564,6 +548,24 @@ export function WebLinks() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteConfirmLinkId} onOpenChange={() => setDeleteConfirmLinkId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Link</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this link? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }

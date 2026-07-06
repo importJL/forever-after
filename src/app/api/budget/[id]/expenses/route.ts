@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { BudgetExpenseSchema } from '@/lib/validation'
+import { validateBody, errorResponse } from '@/lib/api-helpers'
 
 export async function POST(
   request: NextRequest,
@@ -8,10 +10,12 @@ export async function POST(
   try {
     const { id } = await params
     const body = await request.json()
+    const { data, error } = validateBody(BudgetExpenseSchema, body)
+    if (error) return error
+
     const expense = await db.budgetExpense.create({
-      data: { ...body, categoryId: id },
+      data: { ...data!, categoryId: id, id: undefined },
     })
-    // Recalculate spent total
     const expenses = await db.budgetExpense.findMany({ where: { categoryId: id } })
     const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0)
     await db.budgetCategory.update({
@@ -20,7 +24,22 @@ export async function POST(
     })
     return NextResponse.json(expense)
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to create expense'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(error, 'Failed to create expense')
+  }
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const expenses = await db.budgetExpense.findMany({
+      where: { categoryId: id },
+      orderBy: { createdAt: 'desc' },
+    })
+    return NextResponse.json(expenses)
+  } catch (error: unknown) {
+    return errorResponse(error, 'Failed to fetch expenses')
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import {
@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Mail,
   Phone,
+  MoreHorizontal,
 } from 'lucide-react'
 import { useWeddingStore, type Guest } from '@/lib/store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -32,6 +33,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 import {
   Select,
   SelectTrigger,
@@ -53,7 +64,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal } from 'lucide-react'
 
 // ─── Animation variants ───────────────────────────────────────────────
 const containerVariants = {
@@ -112,11 +122,13 @@ interface StatCard {
 
 // ─── Component ────────────────────────────────────────────────────────
 export function GuestManager() {
-  const { guests, setGuests, addGuest, updateGuest, deleteGuest } =
-    useWeddingStore()
+  const guests = useWeddingStore((s) => s.guests)
+  const setGuests = useWeddingStore((s) => s.setGuests)
+  const addGuest = useWeddingStore((s) => s.addGuest)
+  const updateGuest = useWeddingStore((s) => s.updateGuest)
+  const deleteGuest = useWeddingStore((s) => s.deleteGuest)
 
   // ── Local state ────────────────────────────────────────────────────
-  const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingGuest, setEditingGuest] = useState<Guest | null>(null)
   const [formData, setFormData] = useState<Omit<Guest, 'id'>>(EMPTY_GUEST)
@@ -127,23 +139,8 @@ export function GuestManager() {
   const [groupFilter, setGroupFilter] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
 
-  // ── Fetch guests on mount ──────────────────────────────────────────
-  useEffect(() => {
-    async function fetchGuests() {
-      try {
-        const res = await fetch('/api/guests')
-        if (!res.ok) throw new Error('Failed to fetch guests')
-        const data: Guest[] = await res.json()
-        setGuests(data)
-      } catch (err) {
-        console.error(err)
-        toast.error('Failed to load guests')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchGuests()
-  }, [setGuests])
+  // ── Delete confirmation state ─────────────────────────────────────
+  const [deleteConfirmGuest, setDeleteConfirmGuest] = useState<Guest | null>(null)
 
   // ── Derived: filtered guests ───────────────────────────────────────
   const filteredGuests = useMemo(() => {
@@ -234,11 +231,10 @@ export function GuestManager() {
         toast.success(`"${formData.name}" updated successfully`)
       } else {
         // Create
-        const newGuest: Guest = { ...formData, id: crypto.randomUUID() }
         const res = await fetch('/api/guests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newGuest),
+          body: JSON.stringify(formData),
         })
         if (!res.ok) throw new Error('Failed to create guest')
         const created = await res.json()
@@ -253,15 +249,18 @@ export function GuestManager() {
   }
 
   // ── Delete handler ─────────────────────────────────────────────────
-  const handleDelete = async (guest: Guest) => {
+  const handleDelete = async () => {
+    if (!deleteConfirmGuest) return
     try {
-      const res = await fetch(`/api/guests/${guest.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/guests/${deleteConfirmGuest.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete guest')
-      deleteGuest(guest.id)
-      toast.success(`"${guest.name}" removed`)
+      deleteGuest(deleteConfirmGuest.id)
+      toast.success(`"${deleteConfirmGuest.name}" removed`)
     } catch (err) {
       console.error(err)
       toast.error('Failed to delete guest')
+    } finally {
+      setDeleteConfirmGuest(null)
     }
   }
 
@@ -274,15 +273,6 @@ export function GuestManager() {
         <Icon className="size-3" />
         {cfg.label}
       </Badge>
-    )
-  }
-
-  // ── Loading state ──────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
     )
   }
 
@@ -514,7 +504,7 @@ export function GuestManager() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 variant="destructive"
-                                onClick={() => handleDelete(guest)}
+                                onClick={() => setDeleteConfirmGuest(guest)}
                               >
                                 <Trash2 className="size-4" />
                                 Delete
@@ -556,7 +546,7 @@ export function GuestManager() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             variant="destructive"
-                            onClick={() => handleDelete(guest)}
+                            onClick={() => setDeleteConfirmGuest(guest)}
                           >
                             <Trash2 className="size-4" />
                             Delete
@@ -821,6 +811,24 @@ export function GuestManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Delete Confirmation ─────────────────────────────────────────── */}
+      <AlertDialog open={!!deleteConfirmGuest} onOpenChange={() => setDeleteConfirmGuest(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Guest</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{deleteConfirmGuest?.name}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }

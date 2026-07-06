@@ -265,7 +265,7 @@ export function FileImport() {
 
       setImportHistory((prev) => [
         {
-          id: crypto.randomUUID(),
+          id: `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           fileName: selectedFile.name,
           targetModule,
           status: 'success',
@@ -280,7 +280,7 @@ export function FileImport() {
     } catch (err) {
       setImportHistory((prev) => [
         {
-          id: crypto.randomUUID(),
+          id: `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           fileName: selectedFile.name,
           targetModule,
           status: 'error',
@@ -319,7 +319,7 @@ export function FileImport() {
 
       setImportHistory((prev) => [
         {
-          id: crypto.randomUUID(),
+          id: `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           fileName: new URL(googleUrl).hostname,
           targetModule: 'Google',
           status: 'success',

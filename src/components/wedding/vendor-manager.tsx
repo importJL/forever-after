@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,16 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
+import {
   Select,
   SelectTrigger,
   SelectValue,
@@ -22,7 +32,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import type { Vendor } from '@/lib/store'
+import { useWeddingStore, type Vendor } from '@/lib/store'
 import {
   Plus,
   Search,
@@ -121,8 +131,11 @@ function formatCurrency(value: number) {
 }
 
 export function VendorManager() {
-  const [vendors, setVendors] = useState<Vendor[]>([])
-  const [loading, setLoading] = useState(true)
+  const vendors = useWeddingStore((s) => s.vendors)
+  const setVendors = useWeddingStore((s) => s.setVendors)
+  const addVendor = useWeddingStore((s) => s.addVendor)
+  const updateVendor = useWeddingStore((s) => s.updateVendor)
+  const deleteVendor = useWeddingStore((s) => s.deleteVendor)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -130,24 +143,7 @@ export function VendorManager() {
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
   const [formData, setFormData] = useState(emptyVendor)
   const [hoverRating, setHoverRating] = useState(0)
-
-  useEffect(() => {
-    fetchVendors()
-  }, [])
-
-  const fetchVendors = async () => {
-    try {
-      const res = await fetch('/api/vendors')
-      if (res.ok) {
-        const data = await res.json()
-        setVendors(data)
-      }
-    } catch {
-      toast.error('Failed to load vendors')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [deleteConfirmVendor, setDeleteConfirmVendor] = useState<Vendor | null>(null)
 
   const filteredVendors = useMemo(() => {
     return vendors.filter((v) => {
@@ -218,7 +214,7 @@ export function VendorManager() {
         })
         if (res.ok) {
           const updated = await res.json()
-          setVendors((prev) => prev.map((v) => (v.id === updated.id ? updated : v)))
+          updateVendor(updated.id, updated)
           toast.success('Vendor updated')
         } else {
           toast.error('Failed to update vendor')
@@ -227,11 +223,11 @@ export function VendorManager() {
         const res = await fetch('/api/vendors', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...formData, id: crypto.randomUUID() }),
+          body: JSON.stringify(formData),
         })
         if (res.ok) {
           const created = await res.json()
-          setVendors((prev) => [...prev, created])
+          addVendor(created)
           toast.success('Vendor added')
         } else {
           toast.error('Failed to add vendor')
@@ -243,27 +239,21 @@ export function VendorManager() {
     }
   }
 
-  const handleDelete = async (vendor: Vendor) => {
-    if (!window.confirm(`Delete "${vendor.name}"?`)) return
+  const handleDelete = async () => {
+    if (!deleteConfirmVendor) return
     try {
-      const res = await fetch(`/api/vendors/${vendor.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/vendors/${deleteConfirmVendor.id}`, { method: 'DELETE' })
       if (res.ok) {
-        setVendors((prev) => prev.filter((v) => v.id !== vendor.id))
+        deleteVendor(deleteConfirmVendor.id)
         toast.success('Vendor deleted')
       } else {
         toast.error('Failed to delete vendor')
       }
     } catch {
       toast.error('Something went wrong')
+    } finally {
+      setDeleteConfirmVendor(null)
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Store className="h-8 w-8 animate-pulse text-rose-500" />
-      </div>
-    )
   }
 
   return (
@@ -380,7 +370,7 @@ export function VendorManager() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-red-500 hover:text-red-700"
-                        onClick={() => handleDelete(vendor)}
+                        onClick={() => setDeleteConfirmVendor(vendor)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -637,6 +627,24 @@ export function VendorManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteConfirmVendor} onOpenChange={() => setDeleteConfirmVendor(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Vendor</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{deleteConfirmVendor?.name}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

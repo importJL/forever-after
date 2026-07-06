@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,16 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
+import {
   Select,
   SelectTrigger,
   SelectValue,
@@ -22,7 +32,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import type { TimelineEvent } from '@/lib/store'
+import { useWeddingStore, type TimelineEvent } from '@/lib/store'
 import { Plus, Clock, MapPin, Edit, Trash2, Calendar } from 'lucide-react'
 
 const TIMELINE_CATEGORIES = [
@@ -70,29 +80,15 @@ const emptyEvent: Omit<TimelineEvent, 'id' | 'sortOrder'> = {
 }
 
 export function TimelineView() {
-  const [events, setEvents] = useState<TimelineEvent[]>([])
-  const [loading, setLoading] = useState(true)
+  const events = useWeddingStore((s) => s.timelineEvents)
+  const setEvents = useWeddingStore((s) => s.setTimelineEvents)
+  const addTimelineEvent = useWeddingStore((s) => s.addTimelineEvent)
+  const updateTimelineEvent = useWeddingStore((s) => s.updateTimelineEvent)
+  const deleteTimelineEvent = useWeddingStore((s) => s.deleteTimelineEvent)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | null>(null)
   const [formData, setFormData] = useState(emptyEvent)
-
-  useEffect(() => {
-    fetchEvents()
-  }, [])
-
-  const fetchEvents = async () => {
-    try {
-      const res = await fetch('/api/timeline')
-      if (res.ok) {
-        const data = await res.json()
-        setEvents(data)
-      }
-    } catch {
-      toast.error('Failed to load timeline')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [deleteConfirmEvent, setDeleteConfirmEvent] = useState<TimelineEvent | null>(null)
 
   const sortedEvents = useMemo(() => {
     return [...events].sort((a, b) => {
@@ -138,7 +134,7 @@ export function TimelineView() {
         })
         if (res.ok) {
           const updated = await res.json()
-          setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+          updateTimelineEvent(updated.id, updated)
           toast.success('Event updated')
         } else {
           toast.error('Failed to update event')
@@ -147,11 +143,11 @@ export function TimelineView() {
         const res = await fetch('/api/timeline', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...formData, id: crypto.randomUUID(), sortOrder: events.length }),
+          body: JSON.stringify({ ...formData, sortOrder: events.length }),
         })
         if (res.ok) {
           const created = await res.json()
-          setEvents((prev) => [...prev, created])
+          addTimelineEvent(created)
           toast.success('Event added')
         } else {
           toast.error('Failed to add event')
@@ -163,27 +159,21 @@ export function TimelineView() {
     }
   }
 
-  const handleDelete = async (event: TimelineEvent) => {
-    if (!window.confirm(`Delete "${event.title}"?`)) return
+  const handleDelete = async () => {
+    if (!deleteConfirmEvent) return
     try {
-      const res = await fetch(`/api/timeline/${event.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/timeline/${deleteConfirmEvent.id}`, { method: 'DELETE' })
       if (res.ok) {
-        setEvents((prev) => prev.filter((e) => e.id !== event.id))
+        deleteTimelineEvent(deleteConfirmEvent.id)
         toast.success('Event deleted')
       } else {
         toast.error('Failed to delete event')
       }
     } catch {
       toast.error('Something went wrong')
+    } finally {
+      setDeleteConfirmEvent(null)
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Calendar className="h-8 w-8 animate-pulse text-rose-500" />
-      </div>
-    )
   }
 
   return (
@@ -272,7 +262,7 @@ export function TimelineView() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-700"
-                            onClick={() => handleDelete(event)}
+                            onClick={() => setDeleteConfirmEvent(event)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -401,6 +391,24 @@ export function TimelineView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteConfirmEvent} onOpenChange={() => setDeleteConfirmEvent(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{deleteConfirmEvent?.title}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

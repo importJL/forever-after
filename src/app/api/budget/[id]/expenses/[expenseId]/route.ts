@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { BudgetExpenseSchema } from '@/lib/validation'
+import { validateBody, errorResponse } from '@/lib/api-helpers'
 
 export async function PUT(
   request: NextRequest,
@@ -8,11 +10,13 @@ export async function PUT(
   try {
     const { id, expenseId } = await params
     const body = await request.json()
+    const { data, error } = validateBody(BudgetExpenseSchema.partial(), body)
+    if (error) return error
+
     await db.budgetExpense.update({
       where: { id: expenseId },
-      data: body,
+      data,
     })
-    // Recalculate spent total
     const expenses = await db.budgetExpense.findMany({ where: { categoryId: id } })
     const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0)
     await db.budgetCategory.update({
@@ -21,8 +25,7 @@ export async function PUT(
     })
     return NextResponse.json({ success: true })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to update expense'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(error, 'Failed to update expense')
   }
 }
 
@@ -33,7 +36,6 @@ export async function DELETE(
   try {
     const { id, expenseId } = await params
     await db.budgetExpense.delete({ where: { id: expenseId } })
-    // Recalculate spent total
     const expenses = await db.budgetExpense.findMany({ where: { categoryId: id } })
     const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0)
     await db.budgetCategory.update({
@@ -42,7 +44,6 @@ export async function DELETE(
     })
     return NextResponse.json({ success: true })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to delete expense'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(error, 'Failed to delete expense')
   }
 }

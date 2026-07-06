@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { BudgetCategorySchema } from '@/lib/validation'
+import { validateBody, errorResponse } from '@/lib/api-helpers'
 
 export async function GET() {
   try {
@@ -9,18 +11,24 @@ export async function GET() {
     })
     return NextResponse.json(categories)
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch budget categories'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(error, 'Failed to fetch budget categories')
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const category = await db.budgetCategory.create({ data: body })
+    const { data, error } = validateBody(BudgetCategorySchema, body)
+    if (error) return error
+
+    const category = await db.budgetCategory.create({
+      data: {
+        ...data!,
+        id: undefined,
+      },
+    })
     return NextResponse.json(category)
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to create budget category'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return errorResponse(error, 'Failed to create budget category')
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
@@ -20,6 +20,16 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -94,28 +104,11 @@ export function NotificationPanel() {
 
   // Local state
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
-  const [isLoading, setIsLoading] = useState(true)
   const [isMarkingAll, setIsMarkingAll] = useState(false)
   const [isClearingAll, setIsClearingAll] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-
-  // ── Data fetch ───────────────────────────────────────────────────────────
-  useEffect(() => {
-    async function fetchNotifications() {
-      try {
-        const res = await fetch('/api/notifications')
-        if (res.ok) {
-          const data = await res.json()
-          if (Array.isArray(data)) setNotifications(data)
-        }
-      } catch {
-        // Use store data as fallback
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchNotifications()
-  }, [setNotifications])
+  const [deleteConfirmNotifId, setDeleteConfirmNotifId] = useState<string | null>(null)
+  const [clearAllConfirm, setClearAllConfirm] = useState(false)
 
   // ── Derived ──────────────────────────────────────────────────────────────
   const unreadCount = useMemo(
@@ -165,19 +158,21 @@ export function NotificationPanel() {
   )
 
   const handleDelete = useCallback(
-    async (id: string) => {
+    async () => {
+      if (!deleteConfirmNotifId) return
       try {
-        const res = await fetch(`/api/notifications/${id}`, { method: 'DELETE' })
+        const res = await fetch(`/api/notifications/${deleteConfirmNotifId}`, { method: 'DELETE' })
         if (res.ok) {
-          // Remove from store by re-setting without the deleted one
-          setNotifications(storeNotifications.filter((n) => n.id !== id))
+          setNotifications(storeNotifications.filter((n) => n.id !== deleteConfirmNotifId))
           toast.success('Notification deleted.')
         }
       } catch {
         toast.error('Failed to delete notification.')
+      } finally {
+        setDeleteConfirmNotifId(null)
       }
     },
-    [storeNotifications, setNotifications],
+    [deleteConfirmNotifId, storeNotifications, setNotifications],
   )
 
   const handleMarkAllRead = useCallback(async () => {
@@ -187,16 +182,16 @@ export function NotificationPanel() {
     setIsMarkingAll(true)
     for (const notif of unread) {
       markNotificationRead(notif.id)
-      try {
-        await fetch(`/api/notifications/${notif.id}`, {
+    }
+    await Promise.all(
+      unread.map((notif) =>
+        fetch(`/api/notifications/${notif.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ read: true }),
-        })
-      } catch {
-        // Continue with others
-      }
-    }
+        }).catch(() => {})
+      )
+    )
     setIsMarkingAll(false)
     toast.success(`${unread.length} notification(s) marked as read.`)
   }, [storeNotifications, markNotificationRead])
@@ -214,6 +209,7 @@ export function NotificationPanel() {
     }
     clearNotifications()
     setIsClearingAll(false)
+    setClearAllConfirm(false)
     toast.success('All notifications cleared.')
   }, [storeNotifications, clearNotifications])
 
@@ -287,7 +283,7 @@ export function NotificationPanel() {
           }`}
           onClick={(e) => {
             e.stopPropagation()
-            handleDelete(notif.id)
+            setDeleteConfirmNotifId(notif.id)
           }}
         >
           <X className="h-3.5 w-3.5" />
@@ -297,14 +293,6 @@ export function NotificationPanel() {
   }
 
   // ── Render ──────────────────────────────────────────────────────────────
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="h-8 w-8 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin" />
-      </div>
-    )
-  }
-
   return (
     <motion.div
       className="p-4 md:p-6 space-y-6 max-w-4xl mx-auto"
@@ -343,7 +331,7 @@ export function NotificationPanel() {
             variant="outline"
             size="sm"
             disabled={storeNotifications.length === 0 || isClearingAll}
-            onClick={handleClearAll}
+            onClick={() => setClearAllConfirm(true)}
             className="text-destructive hover:text-destructive"
           >
             {isClearingAll ? (
@@ -420,6 +408,42 @@ export function NotificationPanel() {
           ))}
         </Tabs>
       </motion.div>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteConfirmNotifId} onOpenChange={() => setDeleteConfirmNotifId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Notification</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this notification? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear All Confirmation */}
+      <AlertDialog open={clearAllConfirm} onOpenChange={() => setClearAllConfirm(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear All Notifications</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete all notifications? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearAll} className="bg-destructive text-white hover:bg-destructive/90">
+              Clear All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }
