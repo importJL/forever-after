@@ -48,6 +48,8 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDraggable,
+  useDroppable,
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
@@ -68,6 +70,8 @@ interface DragGuestData {
   guest: Guest
   fromTable: number | null
 }
+
+type TablesWithGuestItem = TablePosition & { guests: Guest[]; assignedCount: number }
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const RSVP_CONFIG: Record<Guest['rsvpStatus'], { label: string; color: string; dotClass: string }> = {
@@ -121,6 +125,242 @@ const containerVariants = {
 const itemVariants = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' as const } },
+}
+
+// ── Draggable Guest Chip ──────────────────────────────────────────────────
+function GuestChip({
+  guest,
+  showTable,
+  tablesWithGuests,
+  onUnassign,
+}: {
+  guest: Guest
+  showTable: boolean
+  tablesWithGuests: TablesWithGuestItem[]
+  onUnassign: (id: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: guest.id,
+    data: { guest, fromTable: guest.tableNumber > 0 ? guest.tableNumber : null } satisfies DragGuestData,
+  })
+
+  const rsvp = RSVP_CONFIG[guest.rsvpStatus]
+  const isAssigned = guest.tableNumber > 0
+  const assignedTable = isAssigned
+    ? tablesWithGuests.find((t) => t.number === guest.tableNumber)
+    : null
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={cn(
+        'group/gc flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-150 cursor-grab active:cursor-grabbing select-none',
+        isDragging && 'opacity-0',
+        isAssigned
+          ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:border-rose-300 dark:hover:border-rose-700 hover:shadow-sm'
+          : 'bg-gray-50 dark:bg-gray-800/50 border-dashed border-gray-300 dark:border-gray-600 hover:border-rose-300 dark:hover:border-rose-700 hover:bg-white dark:hover:bg-gray-800',
+      )}
+    >
+      <div className={cn('h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0', rsvp.dotClass)}>
+        {getInitials(guest.name)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{guest.name}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border', rsvp.color)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', rsvp.dotClass)} />
+            {rsvp.label}
+          </span>
+          {showTable && isAssigned && assignedTable && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800">
+              🪑 {assignedTable.label}
+            </span>
+          )}
+        </div>
+      </div>
+      {isAssigned && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 opacity-0 group-hover/gc:opacity-100 transition-opacity text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950 shrink-0"
+          onClick={(e) => { e.stopPropagation(); onUnassign(guest.id) }}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+// ── Droppable Floor Table ────────────────────────────────────────────────
+function FloorTableStandalone({
+  table,
+  index,
+  isSelected,
+  dragOverTableId,
+  selectedTableId,
+  onSelect,
+  onDelete,
+  onStartEdit,
+  onMouseDown,
+}: {
+  table: TablesWithGuestItem
+  index: number
+  isSelected: boolean
+  dragOverTableId: string | null
+  selectedTableId: string | null
+  onSelect: (id: string) => void
+  onDelete: (tableId: string, tableNumber: number) => void
+  onStartEdit: (id: string, capacity: number, label: string) => void
+  onMouseDown: (e: React.MouseEvent, id: string) => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: table.id })
+  const colorClass = getTableColor(index)
+  const isDragOver = isOver || dragOverTableId === table.id
+  const isFull = table.assignedCount >= table.capacity
+  const capacityColor = getCapacityColor(table.assignedCount, table.capacity)
+  const guestCount = table.guests.length
+  const seatRadius = guestCount > 8 ? 40 : guestCount > 6 ? 48 : 55
+  const seatSize = guestCount > 6 ? 'w-6 h-6 text-[8px]' : 'w-8 h-8 text-[10px]'
+  const seatOffset = guestCount > 6 ? 12 : 16
+
+  return (
+    <motion.div
+      ref={setNodeRef}
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.3, delay: index * 0.03 }}
+      className="absolute"
+      style={{ left: table.x, top: table.y, zIndex: isSelected ? 30 : 10 }}
+      onMouseDown={(e) => onMouseDown(e, table.id)}
+      onClick={(e) => {
+        const t = e.target as HTMLElement
+        if (!t.closest('[data-table-grip]') && !t.closest('[data-table-edit-btn]')) {
+          onSelect(table.id)
+        }
+      }}
+    >
+      <div
+        className={cn(
+          'relative flex flex-col items-center transition-all duration-200 cursor-pointer group/ft',
+          isSelected && 'scale-105',
+          isDragOver && 'ring-2 ring-rose-400 ring-offset-2 scale-105',
+        )}
+      >
+        <button
+          data-table-grip
+          className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 h-5 w-10 rounded-full bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 flex items-center justify-center opacity-0 group-hover/ft:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+          title="Drag to move table"
+        >
+          <GripVertical className="h-3 w-3 text-gray-600 dark:text-gray-300" />
+        </button>
+
+        <button
+          data-table-edit-btn
+          className="absolute -top-2 -right-2 z-20 h-5 w-5 rounded-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center opacity-0 group-hover/ft:opacity-100 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation()
+            onStartEdit(table.id, table.capacity, table.label)
+          }}
+        >
+          <Edit className="h-2.5 w-2.5 text-gray-600 dark:text-gray-300" />
+        </button>
+
+        <div className="relative" style={{ width: (seatRadius + 30) * 2, height: (seatRadius + 30) * 2 }}>
+          {table.shape === 'round' && (
+            <div
+              className={cn(
+                'absolute rounded-full border-2 flex items-center justify-center shadow-md transition-all',
+                colorClass,
+                isFull && 'ring-2 ring-rose-400 ring-offset-1',
+              )}
+              style={{
+                width: seatRadius * 2,
+                height: seatRadius * 2,
+                top: 30,
+                left: 30,
+              }}
+            >
+              <div className="text-center">
+                <p className="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight">{table.label}</p>
+                <p className={cn('text-xs font-semibold mt-0.5', capacityColor)}>
+                  {table.assignedCount}/{table.capacity}
+                </p>
+              </div>
+            </div>
+          )}
+          {table.shape === 'rectangle' && (
+            <div
+              className={cn(
+                'absolute rounded-xl border-2 flex items-center justify-center shadow-md transition-all',
+                colorClass,
+                isFull && 'ring-2 ring-rose-400 ring-offset-1',
+              )}
+              style={{
+                width: seatRadius * 2.2,
+                height: seatRadius * 1.4,
+                top: 30 + (seatRadius * 0.3),
+                left: 30 - (seatRadius * 0.1),
+              }}
+            >
+              <div className="text-center">
+                <p className="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight">{table.label}</p>
+                <p className={cn('text-xs font-semibold mt-0.5', capacityColor)}>
+                  {table.assignedCount}/{table.capacity}
+                </p>
+              </div>
+            </div>
+          )}
+          {table.shape === 'oval' && (
+            <div
+              className={cn(
+                'absolute rounded-[50%] border-2 flex items-center justify-center shadow-md transition-all',
+                colorClass,
+                isFull && 'ring-2 ring-rose-400 ring-offset-1',
+              )}
+              style={{
+                width: seatRadius * 2.4,
+                height: seatRadius * 1.6,
+                top: 30 + (seatRadius * 0.2),
+                left: 30 - (seatRadius * 0.2),
+              }}
+            >
+              <div className="text-center">
+                <p className="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight">{table.label}</p>
+                <p className={cn('text-xs font-semibold mt-0.5', capacityColor)}>
+                  {table.assignedCount}/{table.capacity}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {table.guests.map((guest, i) => {
+            const pos = getGuestPosition(i, table.guests.length, seatRadius + 24)
+            const rsvp = RSVP_CONFIG[guest.rsvpStatus]
+            return (
+              <div
+                key={guest.id}
+                className={cn(
+                  'absolute flex items-center justify-center rounded-full text-white shadow-md transition-transform hover:scale-125 hover:z-30 border-2 border-white dark:border-gray-900',
+                  seatSize,
+                  rsvp.dotClass,
+                )}
+                style={{
+                  left: (seatRadius + 30) + pos.x - seatOffset,
+                  top: (seatRadius + 30) + pos.y - seatOffset,
+                }}
+                title={`${guest.name} (${rsvp.label})`}
+              >
+                {getInitials(guest.name)}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </motion.div>
+  )
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -238,8 +478,8 @@ export function SeatingChart() {
     // Auto-position in a grid
     const col = (nextNum - 1) % 4
     const row = Math.floor((nextNum - 1) / 4)
-    const x = 60 + col * 200
-    const y = 60 + row * 200
+    const x = 60 + col * 280
+    const y = 60 + row * 280
 
     const newTable: TablePosition = {
       id: crypto.randomUUID(),
@@ -278,6 +518,59 @@ export function SeatingChart() {
     },
     [],
   )
+
+  // ── Auto-fill ─────────────────────────────────────────────────────────
+  const handleFillTable = useCallback((tableNumber: number, capacity: number) => {
+    const currentlyAssigned = guests.filter((g) => g.tableNumber === tableNumber).length
+    const slots = capacity - currentlyAssigned
+    if (slots <= 0) {
+      toast.error('Table is at full capacity')
+      return
+    }
+
+    const unassignedAccepted = guests.filter((g) => g.tableNumber === 0 && g.rsvpStatus === 'accepted')
+    if (unassignedAccepted.length === 0) {
+      toast.info('No unassigned accepted guests available')
+      return
+    }
+
+    const toAssign = unassignedAccepted.slice(0, slots)
+    let seatNum = currentlyAssigned + 1
+    for (const guest of toAssign) {
+      updateGuest(guest.id, { tableNumber, seatNumber: seatNum })
+      seatNum++
+    }
+
+    toast.success(`${toAssign.length} accepted guest(s) assigned`)
+  }, [guests, updateGuest])
+
+  const handleAutoFillAll = useCallback(() => {
+    const unassignedAccepted = guests.filter((g) => g.tableNumber === 0 && g.rsvpStatus === 'accepted')
+    let totalAssigned = 0
+    let available = [...unassignedAccepted]
+
+    for (const table of tablesWithGuests) {
+      const assigned = guests.filter((g) => g.tableNumber === table.number).length
+      const slots = table.capacity - assigned
+      const toAssign = available.slice(0, slots)
+      available = available.slice(slots)
+
+      let seatNum = assigned + 1
+      for (const guest of toAssign) {
+        updateGuest(guest.id, { tableNumber: table.number, seatNumber: seatNum })
+        seatNum++
+        totalAssigned++
+      }
+
+      if (available.length === 0) break
+    }
+
+    if (totalAssigned > 0) {
+      toast.success(`Auto-filled ${totalAssigned} accepted guest(s) across all tables`)
+    } else {
+      toast.info('No unassigned accepted guests available')
+    }
+  }, [guests, tablesWithGuests, updateGuest])
 
   // ── Guest assignment ───────────────────────────────────────────────────
   const assignGuestToTable = useCallback(
@@ -367,12 +660,11 @@ export function SeatingChart() {
 
   // ── Guest DnD ─────────────────────────────────────────────────────────
   const handleDragStart = useCallback((event: DragStartEvent) => {
-    const guestId = String(event.active.id)
-    const guest = guests.find((g) => g.id === guestId)
-    if (guest) {
-      setActiveDragGuest({ guest, fromTable: guest.tableNumber > 0 ? guest.tableNumber : null })
+    const data = event.active.data.current as DragGuestData | null
+    if (data) {
+      setActiveDragGuest(data)
     }
-  }, [guests])
+  }, [])
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -423,214 +715,6 @@ export function SeatingChart() {
     )
   }
 
-  // ── Render: Draggable Guest Chip ──────────────────────────────────────
-  function renderGuestChip(guest: Guest, showTable: boolean) {
-    const rsvp = RSVP_CONFIG[guest.rsvpStatus]
-    const isAssigned = guest.tableNumber > 0
-    const assignedTable = isAssigned
-      ? tablesWithGuests.find((t) => t.number === guest.tableNumber)
-      : null
-
-    return (
-      <div
-        key={guest.id}
-        className={cn(
-          'group/gc flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-150 cursor-grab active:cursor-grabbing select-none',
-          isAssigned
-            ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:border-rose-300 dark:hover:border-rose-700 hover:shadow-sm'
-            : 'bg-gray-50 dark:bg-gray-800/50 border-dashed border-gray-300 dark:border-gray-600 hover:border-rose-300 dark:hover:border-rose-700 hover:bg-white dark:hover:bg-gray-800',
-        )}
-        data-dnd-guest={guest.id}
-      >
-        {/* Avatar */}
-        <div className={cn('h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0', rsvp.dotClass)}>
-          {getInitials(guest.name)}
-        </div>
-        {/* Name */}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{guest.name}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border', rsvp.color)}>
-              <span className={cn('h-1.5 w-1.5 rounded-full', rsvp.dotClass)} />
-              {rsvp.label}
-            </span>
-            {showTable && isAssigned && assignedTable && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800">
-                🪑 {assignedTable.label}
-              </span>
-            )}
-          </div>
-        </div>
-        {/* Unassign button */}
-        {isAssigned && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 opacity-0 group-hover/gc:opacity-100 transition-opacity text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950 shrink-0"
-            onClick={(e) => { e.stopPropagation(); unassignGuest(guest.id) }}
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        )}
-      </div>
-    )
-  }
-
-  // ── Render: Floor Plan Table ──────────────────────────────────────────
-  function renderFloorTable(table: typeof tablesWithGuests[number], index: number) {
-    const colorClass = getTableColor(index)
-    const isSelected = selectedTableId === table.id
-    const isDragOver = dragOverTableId === table.id
-    const isFull = table.assignedCount >= table.capacity
-    const capacityColor = getCapacityColor(table.assignedCount, table.capacity)
-    const radius = 55
-
-    return (
-      <motion.div
-        key={table.id}
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.3, delay: index * 0.03 }}
-        className="absolute"
-        style={{ left: table.x, top: table.y, zIndex: isSelected ? 30 : 10 }}
-        onMouseDown={(e) => handleTableMouseDown(e, table.id)}
-        onClick={(e) => {
-          // Only select if not dragging (no grip target)
-          if (!(e.target as HTMLElement).closest('[data-table-grip]')) {
-            handleSelectTable(table.id)
-            setIsEditing(false)
-            setEditCapacity(String(table.capacity))
-            setEditLabel(table.label)
-          }
-        }}
-        data-table-drop={table.id}
-      >
-        <div
-          className={cn(
-            'relative flex flex-col items-center transition-all duration-200 cursor-pointer group/ft',
-            isSelected && 'scale-105',
-            isDragOver && 'ring-2 ring-rose-400 ring-offset-2 scale-105',
-          )}
-        >
-          {/* Grip handle */}
-          <button
-            data-table-grip
-            className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 h-5 w-10 rounded-full bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 flex items-center justify-center opacity-0 group-hover/ft:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-            title="Drag to move table"
-          >
-            <GripVertical className="h-3 w-3 text-gray-600 dark:text-gray-300" />
-          </button>
-
-          {/* Edit table button */}
-          <button
-            className="absolute -top-2 -right-2 z-20 h-5 w-5 rounded-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center opacity-0 group-hover/ft:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation()
-              setEditingTableId(table.id)
-              setEditCapacity(String(table.capacity))
-              setEditLabel(table.label)
-            }}
-          >
-            <Edit className="h-2.5 w-2.5 text-gray-600 dark:text-gray-300" />
-          </button>
-
-          {/* Guest seats + table */}
-          <div className="relative" style={{ width: (radius + 30) * 2, height: (radius + 30) * 2 }}>
-            {/* Table shape */}
-            {table.shape === 'round' && (
-              <div
-                className={cn(
-                  'absolute rounded-full border-2 flex items-center justify-center shadow-md transition-all',
-                  colorClass,
-                  isFull && 'ring-2 ring-rose-400 ring-offset-1',
-                )}
-                style={{
-                  width: radius * 2,
-                  height: radius * 2,
-                  top: 30,
-                  left: 30,
-                }}
-              >
-                <div className="text-center">
-                  <p className="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight">{table.label}</p>
-                  <p className={cn('text-xs font-semibold mt-0.5', capacityColor)}>
-                    {table.assignedCount}/{table.capacity}
-                  </p>
-                </div>
-              </div>
-            )}
-            {table.shape === 'rectangle' && (
-              <div
-                className={cn(
-                  'absolute rounded-xl border-2 flex items-center justify-center shadow-md transition-all',
-                  colorClass,
-                  isFull && 'ring-2 ring-rose-400 ring-offset-1',
-                )}
-                style={{
-                  width: radius * 2.2,
-                  height: radius * 1.4,
-                  top: 30 + (radius * 0.3),
-                  left: 30 - (radius * 0.1),
-                }}
-              >
-                <div className="text-center">
-                  <p className="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight">{table.label}</p>
-                  <p className={cn('text-xs font-semibold mt-0.5', capacityColor)}>
-                    {table.assignedCount}/{table.capacity}
-                  </p>
-                </div>
-              </div>
-            )}
-            {table.shape === 'oval' && (
-              <div
-                className={cn(
-                  'absolute rounded-[50%] border-2 flex items-center justify-center shadow-md transition-all',
-                  colorClass,
-                  isFull && 'ring-2 ring-rose-400 ring-offset-1',
-                )}
-                style={{
-                  width: radius * 2.4,
-                  height: radius * 1.6,
-                  top: 30 + (radius * 0.2),
-                  left: 30 - (radius * 0.2),
-                }}
-              >
-                <div className="text-center">
-                  <p className="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight">{table.label}</p>
-                  <p className={cn('text-xs font-semibold mt-0.5', capacityColor)}>
-                    {table.assignedCount}/{table.capacity}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Guest seats around table */}
-            {table.guests.map((guest, i) => {
-              const pos = getGuestPosition(i, table.guests.length, radius + 24)
-              const rsvp = RSVP_CONFIG[guest.rsvpStatus]
-              return (
-                <div
-                  key={guest.id}
-                  className={cn(
-                    'absolute flex items-center justify-center w-8 h-8 rounded-full text-[10px] font-bold text-white shadow-md transition-transform hover:scale-125 hover:z-30 border-2 border-white dark:border-gray-900',
-                    rsvp.dotClass,
-                  )}
-                  style={{
-                    left: (radius + 30) + pos.x - 16,
-                    top: (radius + 30) + pos.y - 16,
-                  }}
-                  title={`${guest.name} (${rsvp.label})`}
-                >
-                  {getInitials(guest.name)}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </motion.div>
-    )
-  }
-
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -660,6 +744,12 @@ export function SeatingChart() {
               <Maximize2 className="h-3.5 w-3.5 mr-1.5" />
               Reset
             </Button>
+            {tablePositions.length > 0 && unassignedGuests.some((g) => g.rsvpStatus === 'accepted') && (
+              <Button variant="outline" size="sm" onClick={handleAutoFillAll}>
+                <Users className="h-3.5 w-3.5 mr-1.5" />
+                Auto-fill All
+              </Button>
+            )}
             <Button onClick={() => setAddDialogOpen(true)} className="bg-rose-500 hover:bg-rose-600 text-white">
               <Plus className="h-4 w-4 mr-1.5" />
               Add Table
@@ -765,7 +855,24 @@ export function SeatingChart() {
                   }}
                 />
                 {/* Tables */}
-                {tablesWithGuests.map((table, i) => renderFloorTable(table, i))}
+                {tablesWithGuests.map((table, i) => (
+                  <FloorTableStandalone
+                    key={table.id}
+                    table={table}
+                    index={i}
+                    isSelected={selectedTableId === table.id}
+                    dragOverTableId={dragOverTableId}
+                    selectedTableId={selectedTableId}
+                    onSelect={handleSelectTable}
+                    onDelete={handleDeleteTable}
+                    onStartEdit={(id, capacity, label) => {
+                      setEditingTableId(id)
+                      setEditCapacity(String(capacity))
+                      setEditLabel(label)
+                    }}
+                    onMouseDown={handleTableMouseDown}
+                  />
+                ))}
                 {/* Extendable area */}
                 <div style={{ minHeight: Math.max(FLOOR_PLAN_MIN_H, ...tablePositions.map((t) => t.y + 250)) }} />
               </div>
@@ -833,7 +940,15 @@ export function SeatingChart() {
                             className="overflow-hidden"
                           >
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 pt-2 pl-5">
-                              {groupGuests.map((g) => renderGuestChip(g, true))}
+                              {groupGuests.map((g) => (
+                                <GuestChip
+                                  key={g.id}
+                                  guest={g}
+                                  showTable={true}
+                                  tablesWithGuests={tablesWithGuests}
+                                  onUnassign={unassignGuest}
+                                />
+                              ))}
                             </div>
                           </motion.div>
                         )}
@@ -941,7 +1056,6 @@ export function SeatingChart() {
                             setIsEditing(false)
                           }}
                           className="h-8 text-sm w-20"
-                          disabled={editingTableId === selectedTable.id}
                         />
                         <span className="text-xs text-gray-400">seats</span>
                       </div>
@@ -1056,7 +1170,18 @@ export function SeatingChart() {
                             Assign
                           </Button>
                         </div>
-                        <p className="text-[10px] text-gray-400">💡 You can also drag guests from the pool below directly onto tables in the floor plan</p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs"
+                            onClick={() => handleFillTable(selectedTable.number, selectedTable.capacity)}
+                          >
+                            <Users className="h-3 w-3 mr-1" />
+                            Fill with accepted
+                          </Button>
+                          <p className="text-[10px] text-gray-400">Drag guests from the pool below onto tables</p>
+                        </div>
                       </>
                     )}
                   </div>
