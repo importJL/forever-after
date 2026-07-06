@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
+import { useWeddingStore } from '@/lib/store'
 import {
   FileUp,
   Upload,
@@ -15,6 +16,7 @@ import {
   CheckCircle,
   AlertCircle,
   X,
+  Table2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -64,7 +66,7 @@ const TARGET_MODULES = [
   { value: 'notes', label: 'General Notes' },
 ] as const
 
-const ACCEPTED_EXTENSIONS = ['.xlsx', '.docx', '.pptx']
+const ACCEPTED_EXTENSIONS = ['.csv', '.xlsx', '.docx', '.pptx']
 
 // ── Animation ──────────────────────────────────────────────────────────────
 const containerVariants = {
@@ -90,6 +92,8 @@ function formatFileSize(bytes: number): string {
 function getFileTypeIcon(fileName: string) {
   const ext = fileName.toLowerCase().split('.').pop()
   switch (ext) {
+    case 'csv':
+      return <Table2 className="h-8 w-8 text-green-600" />
     case 'xlsx':
       return <FileSpreadsheet className="h-8 w-8 text-emerald-600" />
     case 'docx':
@@ -104,6 +108,8 @@ function getFileTypeIcon(fileName: string) {
 function getFileTypeBadge(fileName: string) {
   const ext = fileName.toLowerCase().split('.').pop()
   switch (ext) {
+    case 'csv':
+      return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">CSV</Badge>
     case 'xlsx':
       return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Spreadsheet</Badge>
     case 'docx':
@@ -129,6 +135,9 @@ export function FileImport() {
     rows: string[][]
   } | null>(null)
   const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([])
+
+  // Setup CSV for Guest imports
+  const [setupFile, setSetupFile] = useState<SelectedFile | null>(null)
 
   // Google import state
   const [googleUrl, setGoogleUrl] = useState('')
@@ -198,7 +207,27 @@ export function FileImport() {
   const clearFile = useCallback(() => {
     setSelectedFile(null)
     setPreviewData(null)
+    setSetupFile(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [])
+
+  const setupFileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleSetupFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSetupFile({
+        file,
+        name: file.name,
+        size: formatFileSize(file.size),
+        type: file.type || 'application/octet-stream',
+      })
+    }
+  }, [])
+
+  const clearSetupFile = useCallback(() => {
+    setSetupFile(null)
+    if (setupFileInputRef.current) setupFileInputRef.current.value = ''
   }, [])
 
   // ── Upload & Preview ────────────────────────────────────────────────────
@@ -209,6 +238,7 @@ export function FileImport() {
       const formData = new FormData()
       formData.append('file', selectedFile.file)
       formData.append('targetModule', targetModule)
+      if (setupFile) formData.append('setupFile', setupFile.file)
 
       const res = await fetch('/api/import', {
         method: 'POST',
@@ -249,6 +279,7 @@ export function FileImport() {
       formData.append('file', selectedFile.file)
       formData.append('targetModule', targetModule)
       formData.append('confirm', 'true')
+      if (setupFile) formData.append('setupFile', setupFile.file)
 
       const res = await fetch('/api/import', {
         method: 'POST',
@@ -261,7 +292,17 @@ export function FileImport() {
       }
 
       const data = await res.json()
-      const rowCount = previewData?.rows.length ?? data.count ?? 0
+      const rowCount = data.count ?? previewData?.rows.length ?? 0
+
+      // Update Zustand store with imported guests
+      if (data.data && Array.isArray(data.data)) {
+        useWeddingStore.getState().setGuests(data.data)
+      }
+
+      // Update Zustand store with setup data
+      if (data.setupData) {
+        useWeddingStore.getState().setGuestSetup(data.setupData)
+      }
 
       setImportHistory((prev) => [
         {
@@ -275,7 +316,7 @@ export function FileImport() {
         ...prev,
       ])
 
-      toast.success(`Successfully imported ${rowCount} record(s) into ${targetModule}.`)
+      toast.success(`Successfully imported ${rowCount} guest(s).`)
       clearFile()
     } catch (err) {
       setImportHistory((prev) => [
@@ -292,7 +333,7 @@ export function FileImport() {
     } finally {
       setIsUploading(false)
     }
-  }, [selectedFile, targetModule, previewData, clearFile])
+  }, [selectedFile, targetModule, previewData, clearFile, setupFile])
 
   // ── Google Import ────────────────────────────────────────────────────────
   const handleGoogleExtract = useCallback(async () => {
@@ -385,7 +426,7 @@ export function FileImport() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".xlsx,.docx,.pptx"
+                accept=".csv,.xlsx,.docx,.pptx"
                 onChange={handleInputChange}
                 className="hidden"
               />
@@ -400,7 +441,7 @@ export function FileImport() {
                 {isDragging ? 'Drop file here...' : 'Drop files here or click to browse'}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Supports .xlsx, .docx, .pptx
+                Supports .csv, .xlsx, .docx, .pptx
               </p>
             </div>
 
@@ -428,39 +469,85 @@ export function FileImport() {
 
             {/* Target Module + Preview Button */}
             {selectedFile && !previewData && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
-                <div className="space-y-1.5 w-full sm:w-48">
-                  <Label className="text-xs">Target Module</Label>
-                  <Select value={targetModule} onValueChange={setTargetModule}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TARGET_MODULES.map((mod) => (
-                        <SelectItem key={mod.value} value={mod.value}>
-                          {mod.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+                  <div className="space-y-1.5 w-full sm:w-48">
+                    <Label className="text-xs">Target Module</Label>
+                    <Select value={targetModule} onValueChange={setTargetModule}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TARGET_MODULES.map((mod) => (
+                          <SelectItem key={mod.value} value={mod.value}>
+                            {mod.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    className="bg-rose-600 hover:bg-rose-700 text-white"
+                    disabled={isUploading}
+                    onClick={handlePreview}
+                  >
+                    {isUploading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Processing...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <FileUp className="h-4 w-4" />
+                        Preview &amp; Import
+                      </span>
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  className="bg-rose-600 hover:bg-rose-700 text-white"
-                  disabled={isUploading}
-                  onClick={handlePreview}
-                >
-                  {isUploading ? (
-                    <span className="flex items-center gap-2">
-                      <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Processing...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <FileUp className="h-4 w-4" />
-                      Preview &amp; Import
-                    </span>
-                  )}
-                </Button>
+
+                {/* Setup CSV (optional, for Guest imports) */}
+                {targetModule === 'guests' && (
+                  <div className="rounded-lg border border-dashed border-muted-foreground/25 p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <Label className="text-xs font-medium">Setup CSV (optional)</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Upload the Setup CSV to populate dropdown options for Side, Category, Relationship Group, etc.
+                        </p>
+                      </div>
+                      {!setupFile ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 text-xs"
+                          onClick={() => setupFileInputRef.current?.click()}
+                        >
+                          <Upload className="h-3 w-3 mr-1" />
+                          Choose File
+                        </Button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground truncate max-w-[120px]">{setupFile.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                            onClick={clearSetupFile}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      <input
+                        ref={setupFileInputRef}
+                        type="file"
+                        accept=".csv,.xlsx"
+                        onChange={handleSetupFileSelect}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

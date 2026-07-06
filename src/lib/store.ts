@@ -28,7 +28,28 @@ export interface Guest {
   tableNumber: number
   seatNumber: number
   role: string
+  priority: number
+  side: string
+  category: string
+  relationshipGroup: string
+  overseas: boolean
+  verbalAsked: boolean
+  adults: number
+  children: number
+  totalInParty: number
+  address: string
+  giftReceived: string
+  thankYouSent: boolean
   notes: string
+}
+
+export interface GuestSetup {
+  sides: string[]
+  categories: string[]
+  relationshipGroups: string[]
+  rsvpStatuses: string[]
+  priorities: number[]
+  binaries: string[]
 }
 
 export interface BudgetCategory {
@@ -208,6 +229,10 @@ interface WeddingStore {
   markNotificationRead: (id: string) => void
   clearNotifications: () => void
 
+  // Guest Setup (dropdown mappings from Setup CSV)
+  guestSetup: GuestSetup | null
+  setGuestSetup: (setup: GuestSetup | null) => void
+
   // Data loading
   isLoaded: boolean
   setIsLoaded: (loaded: boolean) => void
@@ -344,6 +369,10 @@ export const useWeddingStore = create<WeddingStore>((set) => ({
     ),
   })),
   clearNotifications: () => set({ notifications: [] }),
+
+  // Guest Setup
+  guestSetup: null,
+  setGuestSetup: (setup) => set({ guestSetup: setup }),
 
   // Data loading
   isLoaded: false,

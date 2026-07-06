@@ -13,6 +13,18 @@ export const GuestSchema = z.object({
   tableNumber: z.number().int().min(0).default(0),
   seatNumber: z.number().int().min(0).default(0),
   role: z.string().max(100).default('guest'),
+  priority: z.number().int().min(0).max(3).default(3),
+  side: z.string().max(50).default(''),
+  category: z.string().max(100).default(''),
+  relationshipGroup: z.string().max(100).default(''),
+  overseas: z.boolean().default(false),
+  verbalAsked: z.boolean().default(false),
+  adults: z.number().int().min(0).default(1),
+  children: z.number().int().min(0).default(0),
+  totalInParty: z.number().int().min(0).default(1),
+  address: z.string().max(500).default(''),
+  giftReceived: z.string().max(500).default(''),
+  thankYouSent: z.boolean().default(false),
   notes: z.string().max(2000).default(''),
 })
 

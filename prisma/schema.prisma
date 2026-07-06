@@ -37,6 +37,18 @@ model Guest {
   tableNumber   Int      @default(0)
   seatNumber    Int      @default(0)
   role          String   @default("guest") // guest, bridesmaid, groomsman, family, officiant
+  priority      Int      @default(3)
+  side          String   @default("")
+  category      String   @default("")
+  relationshipGroup String @default("")
+  overseas      Boolean  @default(false)
+  verbalAsked   Boolean  @default(false)
+  adults        Int      @default(1)
+  children      Int      @default(0)
+  totalInParty  Int      @default(1)
+  address       String   @default("")
+  giftReceived  String   @default("")
+  thankYouSent  Boolean  @default(false)
   notes         String   @default("")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
