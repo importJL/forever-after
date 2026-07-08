@@ -432,7 +432,7 @@ export function VendorManager() {
                     {(vendor.address || vendor.district) && (
                       <div className="flex items-center gap-2 text-gray-500">
                         <LocationLink
-                          locationName={`${vendor.address}${vendor.district ? `, ${vendor.district}` : ''}`}
+                          locationName={vendor.name}
                           address={`${vendor.address}${vendor.district ? `, ${vendor.district}` : ''}${vendor.city ? `, ${vendor.city}` : ''}`}
                           className="text-gray-500 hover:text-rose-500"
                         />
