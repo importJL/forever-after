@@ -95,6 +95,9 @@ export interface Vendor {
   email: string
   phone: string
   website: string
+  address: string
+  district: string
+  city: string
   price: number
   depositPaid: number
   status: 'considering' | 'booked' | 'confirmed' | 'cancelled'
@@ -153,6 +156,9 @@ export interface WeddingInfo {
   date: string
   venue: string
   venueAddress: string
+  ceremonyDate: string
+  ceremonyLocation: string
+  ceremonyAddress: string
   theme: string
   guestCount: number
   budgetTotal: number
@@ -254,6 +260,9 @@ export const useWeddingStore = create<WeddingStore>((set) => ({
     date: '',
     venue: '',
     venueAddress: '',
+    ceremonyDate: '',
+    ceremonyLocation: '',
+    ceremonyAddress: '',
     theme: 'Classic Elegance',
     guestCount: 0,
     budgetTotal: 0,

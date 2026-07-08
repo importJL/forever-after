@@ -8,19 +8,22 @@ datasource db {
 }
 
 model Wedding {
-  id          String   @id @default(cuid())
-  coupleName  String   @default("Our Wedding")
-  partner1    String   @default("")
-  partner2    String   @default("")
-  date        String   @default("")
-  venue       String   @default("")
-  venueAddress String  @default("")
-  theme       String   @default("Classic Elegance")
-  guestCount  Int      @default(0)
-  budgetTotal Float    @default(0)
-  notes       String   @default("")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(cuid())
+  coupleName       String   @default("Our Wedding")
+  partner1         String   @default("")
+  partner2         String   @default("")
+  date             String   @default("")
+  venue            String   @default("")
+  venueAddress     String   @default("")
+  ceremonyDate     String   @default("")
+  ceremonyLocation String   @default("")
+  ceremonyAddress  String   @default("")
+  theme            String   @default("Classic Elegance")
+  guestCount       Int      @default(0)
+  budgetTotal      Float    @default(0)
+  notes            String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Guest {
@@ -106,6 +109,9 @@ model Vendor {
   email       String   @default("")
   phone       String   @default("")
   website     String   @default("")
+  address     String   @default("")
+  district    String   @default("")
+  city        String   @default("Hong Kong")
   price       Float    @default(0)
   depositPaid Float    @default(0)
   status      String   @default("considering") // considering, booked, confirmed, cancelled

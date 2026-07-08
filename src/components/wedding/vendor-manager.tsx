@@ -33,6 +33,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useWeddingStore, type Vendor } from '@/lib/store'
+import { LocationLink } from '@/components/map/location-link'
 import {
   Plus,
   Search,
@@ -41,6 +42,7 @@ import {
   Phone,
   Mail,
   Globe,
+  MapPin,
   Store,
   Edit,
   Trash2,
@@ -78,6 +80,9 @@ const emptyVendor: Omit<Vendor, 'id'> = {
   email: '',
   phone: '',
   website: '',
+  address: '',
+  district: '',
+  city: 'Hong Kong',
   price: 0,
   depositPaid: 0,
   status: 'considering',
@@ -188,6 +193,9 @@ export function VendorManager() {
       email: vendor.email,
       phone: vendor.phone,
       website: vendor.website,
+      address: vendor.address,
+      district: vendor.district,
+      city: vendor.city,
       price: vendor.price,
       depositPaid: vendor.depositPaid,
       status: vendor.status,
@@ -421,6 +429,15 @@ export function VendorManager() {
                         </a>
                       </div>
                     )}
+                    {(vendor.address || vendor.district) && (
+                      <div className="flex items-center gap-2 text-gray-500">
+                        <LocationLink
+                          locationName={`${vendor.address}${vendor.district ? `, ${vendor.district}` : ''}`}
+                          address={`${vendor.address}${vendor.district ? `, ${vendor.district}` : ''}${vendor.city ? `, ${vendor.city}` : ''}`}
+                          className="text-gray-500 hover:text-rose-500"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Pricing */}
@@ -557,6 +574,35 @@ export function VendorManager() {
                 onChange={(e) => setFormData((f) => ({ ...f, website: e.target.value }))}
                 placeholder="https://example.com"
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="vendor-address">Address</Label>
+              <Input
+                id="vendor-address"
+                value={formData.address}
+                onChange={(e) => setFormData((f) => ({ ...f, address: e.target.value }))}
+                placeholder="Street address e.g. 1 Queen's Road Central"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="vendor-district">District</Label>
+                <Input
+                  id="vendor-district"
+                  value={formData.district}
+                  onChange={(e) => setFormData((f) => ({ ...f, district: e.target.value }))}
+                  placeholder="e.g. Central"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="vendor-city">City</Label>
+                <Input
+                  id="vendor-city"
+                  value={formData.city}
+                  onChange={(e) => setFormData((f) => ({ ...f, city: e.target.value }))}
+                  placeholder="e.g. Hong Kong"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">

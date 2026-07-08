@@ -37,6 +37,7 @@ import {
   Gift,
 } from 'lucide-react'
 import { useWeddingStore } from '@/lib/store'
+import { LocationLink } from '@/components/map/location-link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -241,10 +242,10 @@ export function DashboardView() {
   }, [guests])
 
   const budgetStats = useMemo(() => {
-    const totalBudgeted = budgetCategories.reduce((sum, c) => sum + c.budgeted, 0)
+    const totalBudget = wedding.budgetTotal > 0 ? wedding.budgetTotal : budgetCategories.reduce((sum, c) => sum + c.budgeted, 0)
     const totalSpent = budgetCategories.reduce((sum, c) => sum + c.spent, 0)
-    return { totalBudgeted, totalSpent, percentage: totalBudgeted > 0 ? Math.min(100, (totalSpent / totalBudgeted) * 100) : 0 }
-  }, [budgetCategories])
+    return { totalBudget, totalSpent, percentage: totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0 }
+  }, [budgetCategories, wedding.budgetTotal])
 
   const taskStats = useMemo(() => {
     const total = tasks.length
@@ -341,13 +342,30 @@ export function DashboardView() {
                     <span>{format(new Date(wedding.date), 'EEEE, MMMM d, yyyy')}</span>
                   </div>
                 )}
-                {wedding.venue && (
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="w-4 h-4" />
-                    <span>{wedding.venue}</span>
-                  </div>
+                {(wedding.venue || wedding.venueAddress) && (
+                  <LocationLink
+                    locationName={wedding.venue}
+                    address={wedding.venueAddress}
+                    className="text-rose-100 hover:text-white"
+                  />
+                )}
+                {(wedding.ceremonyLocation || wedding.ceremonyAddress) && (
+                  <LocationLink
+                    locationName={wedding.ceremonyLocation}
+                    address={wedding.ceremonyAddress}
+                    className="text-rose-100 hover:text-white"
+                  />
                 )}
               </div>
+
+              {wedding.ceremonyDate && (
+                <div className="flex items-center gap-1.5 text-rose-100 text-sm mb-6">
+                  <CalendarDays className="w-4 h-4" />
+                  <span>
+                    Ceremony: {format(new Date(wedding.ceremonyDate), 'EEEE, MMMM d, yyyy \'at\' h:mm a')}
+                  </span>
+                </div>
+              )}
 
               <CountdownTimer targetDate={wedding.date} />
             </div>
@@ -381,7 +399,7 @@ export function DashboardView() {
           icon={Wallet}
           label="Budget"
           value={`${formatCurrency(budgetStats.totalSpent)}`}
-          description={`of ${formatCurrency(budgetStats.totalBudgeted)} budgeted`}
+          description={`of ${formatCurrency(budgetStats.totalBudget)} budget`}
           accentColor="bg-amber-100 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
         >
           <div className="space-y-1.5">

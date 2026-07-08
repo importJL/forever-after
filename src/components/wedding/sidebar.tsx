@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useWeddingStore, ViewType } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
+import { LocationLink } from '@/components/map/location-link'
 import {
   LayoutDashboard,
   Users,
@@ -56,6 +58,8 @@ const navItems: NavItem[] = [
 export function WeddingSidebar() {
   const { activeView, setActiveView, sidebarOpen, setSidebarOpen, notifications, wedding, guests, tasks, budgetCategories, vendors, timelineEvents, mediaItems, webLinks } = useWeddingStore()
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   const unreadCount = notifications.filter(n => !n.read).length
 
   const handleExport = () => {
@@ -116,8 +120,23 @@ export function WeddingSidebar() {
             </span>
           </div>
           <p className="text-[11px] text-rose-600/80 dark:text-rose-400/80 font-medium">{wedding.date}</p>
-          {wedding.venue && (
-            <p className="text-[10px] text-muted-foreground truncate mt-0.5">{wedding.venue}</p>
+          {(wedding.venue || wedding.venueAddress) && (
+            <div className="mt-0.5">
+              <LocationLink
+                locationName={wedding.venue}
+                address={wedding.venueAddress}
+                className="text-[10px] text-muted-foreground hover:text-rose-600"
+              />
+            </div>
+          )}
+          {(wedding.ceremonyLocation || wedding.ceremonyAddress) && (
+            <div className="mt-0.5">
+              <LocationLink
+                locationName={wedding.ceremonyLocation}
+                address={wedding.ceremonyAddress}
+                className="text-[10px] text-muted-foreground hover:text-rose-600"
+              />
+            </div>
           )}
         </div>
       )}
@@ -198,11 +217,11 @@ export function WeddingSidebar() {
               )}
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
-              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              {!mounted ? <div className="w-4 h-4" /> : theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               {sidebarOpen && <span className="text-xs">Toggle Theme</span>}
             </Button>
           </TooltipTrigger>
-          {(!sidebarOpen) && <TooltipContent side="right">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</TooltipContent>}
+          {(!sidebarOpen) && <TooltipContent side="right">{!mounted ? '' : theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</TooltipContent>}
         </Tooltip>
 
         {/* Export data */}

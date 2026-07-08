@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { LocationLink } from '@/components/map/location-link'
 
 const WEDDING_THEMES = [
   'Classic Elegance',
@@ -47,6 +48,9 @@ interface WeddingFormData {
   date: string
   venue: string
   venueAddress: string
+  ceremonyDate: string
+  ceremonyLocation: string
+  ceremonyAddress: string
   theme: string
   guestCount: string
   budgetTotal: string
@@ -59,6 +63,9 @@ const initialFormData: WeddingFormData = {
   date: '',
   venue: '',
   venueAddress: '',
+  ceremonyDate: '',
+  ceremonyLocation: '',
+  ceremonyAddress: '',
   theme: 'Classic Elegance',
   guestCount: '0',
   budgetTotal: '0',
@@ -110,6 +117,9 @@ export function SettingsView() {
     date: wedding.date ? wedding.date.split('T')[0] : '',
     venue: wedding.venue || '',
     venueAddress: wedding.venueAddress || '',
+    ceremonyDate: wedding.ceremonyDate || '',
+    ceremonyLocation: wedding.ceremonyLocation || '',
+    ceremonyAddress: wedding.ceremonyAddress || '',
     theme: wedding.theme || 'Classic Elegance',
     guestCount: String(wedding.guestCount || 0),
     budgetTotal: String(wedding.budgetTotal || 0),
@@ -126,6 +136,9 @@ export function SettingsView() {
       date: wedding.date ? wedding.date.split('T')[0] : '',
       venue: wedding.venue || '',
       venueAddress: wedding.venueAddress || '',
+      ceremonyDate: wedding.ceremonyDate || '',
+      ceremonyLocation: wedding.ceremonyLocation || '',
+      ceremonyAddress: wedding.ceremonyAddress || '',
       theme: wedding.theme || 'Classic Elegance',
       guestCount: String(wedding.guestCount || 0),
       budgetTotal: String(wedding.budgetTotal || 0),
@@ -158,6 +171,9 @@ export function SettingsView() {
         date: formData.date,
         venue: formData.venue,
         venueAddress: formData.venueAddress,
+        ceremonyDate: formData.ceremonyDate,
+        ceremonyLocation: formData.ceremonyLocation,
+        ceremonyAddress: formData.ceremonyAddress,
         theme: formData.theme,
         guestCount: Number(formData.guestCount) || 0,
         budgetTotal: Number(formData.budgetTotal) || 0,
@@ -196,6 +212,9 @@ export function SettingsView() {
       date: wedding.date ? wedding.date.split('T')[0] : '',
       venue: wedding.venue || '',
       venueAddress: wedding.venueAddress || '',
+      ceremonyDate: wedding.ceremonyDate || '',
+      ceremonyLocation: wedding.ceremonyLocation || '',
+      ceremonyAddress: wedding.ceremonyAddress || '',
       theme: wedding.theme || 'Classic Elegance',
       guestCount: String(wedding.guestCount || 0),
       budgetTotal: String(wedding.budgetTotal || 0),
@@ -291,12 +310,20 @@ export function SettingsView() {
 
           <div className="space-y-2">
             <Label htmlFor="venue-name">Venue Name</Label>
-            <Input
-              id="venue-name"
-              placeholder="e.g., The Grand Ballroom"
-              value={formData.venue}
-              onChange={(e) => handleChange('venue', e.target.value)}
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                id="venue-name"
+                placeholder="e.g., The Grand Ballroom"
+                value={formData.venue}
+                onChange={(e) => handleChange('venue', e.target.value)}
+              />
+              {formData.venueAddress && (
+                <LocationLink
+                  locationName={formData.venue}
+                  address={formData.venueAddress}
+                />
+              )}
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="venue-address">Venue Address</Label>
@@ -305,6 +332,45 @@ export function SettingsView() {
               placeholder="Full address of the venue"
               value={formData.venueAddress}
               onChange={(e) => handleChange('venueAddress', e.target.value)}
+            />
+          </div>
+
+          <Separator className="my-2" />
+
+          <div className="space-y-2">
+            <Label htmlFor="ceremony-date">Ceremony Date</Label>
+            <Input
+              id="ceremony-date"
+              type="datetime-local"
+              value={formData.ceremonyDate}
+              onChange={(e) => handleChange('ceremonyDate', e.target.value)}
+              className="max-w-xs"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ceremony-location">Ceremony Location Name</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="ceremony-location"
+                placeholder="e.g., St. Mary's Church"
+                value={formData.ceremonyLocation}
+                onChange={(e) => handleChange('ceremonyLocation', e.target.value)}
+              />
+              {formData.ceremonyAddress && (
+                <LocationLink
+                  locationName={formData.ceremonyLocation}
+                  address={formData.ceremonyAddress}
+                />
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ceremony-address">Ceremony Address</Label>
+            <Input
+              id="ceremony-address"
+              placeholder="Full address of the ceremony"
+              value={formData.ceremonyAddress}
+              onChange={(e) => handleChange('ceremonyAddress', e.target.value)}
             />
           </div>
         </FormFieldGroup>

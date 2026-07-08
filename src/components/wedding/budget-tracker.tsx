@@ -120,6 +120,7 @@ const SEED_CATEGORIES = [
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function BudgetTracker() {
+  const wedding = useWeddingStore((s) => s.wedding)
   const budgetCategories = useWeddingStore((s) => s.budgetCategories)
   const setBudgetCategories = useWeddingStore((s) => s.setBudgetCategories)
   const addBudgetCategory = useWeddingStore((s) => s.addBudgetCategory)
@@ -419,13 +420,14 @@ export function BudgetTracker() {
 
   // ── Computed values ────────────────────────────────────────────────────────
 
-  const totalBudgeted = budgetCategories.reduce(
+  const totalAllocated = budgetCategories.reduce(
     (sum, c) => sum + c.budgeted,
     0
   )
   const totalSpent = budgetCategories.reduce((sum, c) => sum + c.spent, 0)
-  const remaining = totalBudgeted - totalSpent
-  const overallPct = totalBudgeted > 0 ? Math.min((totalSpent / totalBudgeted) * 100, 100) : 0
+  const totalBudget = wedding.budgetTotal > 0 ? wedding.budgetTotal : totalAllocated
+  const remaining = totalBudget - totalSpent
+  const overallPct = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0
 
   // Chart data
   const pieData = budgetCategories.map((c) => ({
@@ -434,11 +436,20 @@ export function BudgetTracker() {
     color: c.color,
   }))
 
+  const spendingData = budgetCategories
+    .filter((c) => c.spent > 0)
+    .map((c) => ({
+      name: c.name,
+      value: c.spent,
+      color: c.color,
+    }))
+
   const barData = budgetCategories.map((c) => ({
     name: c.name.length > 10 ? c.name.slice(0, 10) + '…' : c.name,
     fullName: c.name,
     budgeted: c.budgeted,
     spent: c.spent,
+    color: c.color,
   }))
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -458,14 +469,19 @@ export function BudgetTracker() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <DollarSign className="h-4 w-4" />
-              Total Budgeted
+              Total Budget
             </div>
-            <p className="mt-1 text-2xl font-bold">{formatCurrency(totalBudgeted)}</p>
+            <p className="mt-1 text-2xl font-bold">{formatCurrency(totalBudget)}</p>
+            {totalAllocated > 0 && totalBudget > 0 && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {formatCurrency(totalAllocated)} allocated across categories
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -492,6 +508,20 @@ export function BudgetTracker() {
             </p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Receipt className="h-4 w-4" />
+              Allocated
+            </div>
+            <p className="mt-1 text-2xl font-bold">{formatCurrency(totalAllocated)}</p>
+            {totalBudget > 0 && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {Math.round((totalAllocated / totalBudget) * 100)}% of budget
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Overall Progress */}
@@ -500,17 +530,23 @@ export function BudgetTracker() {
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Overall Progress</span>
             <span className="font-medium">
-              {totalBudgeted > 0 ? Math.round((totalSpent / totalBudgeted) * 100) : 0}% spent
+              {totalBudget > 0 ? `${Math.round((totalSpent / totalBudget) * 100)}% spent` : 'Set a budget in Settings'}
             </span>
           </div>
           <div className="relative h-3 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${getProgressColor(
-                totalBudgeted > 0 ? (totalSpent / totalBudgeted) * 100 : 0
-              )}`}
+              className={`h-full rounded-full transition-all duration-500 ${
+                totalBudget > 0 ? getProgressColor((totalSpent / totalBudget) * 100) : 'bg-muted'
+              }`}
               style={{ width: `${overallPct}%` }}
             />
           </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {formatCurrency(totalSpent)} spent of {formatCurrency(totalBudget)} budget
+            {totalAllocated !== totalBudget && totalAllocated > 0 && (
+              <> &middot; {formatCurrency(totalAllocated)} allocated across categories</>
+            )}
+          </p>
         </CardContent>
       </Card>
 
@@ -518,6 +554,7 @@ export function BudgetTracker() {
       <Tabs defaultValue="allocation">
         <TabsList>
           <TabsTrigger value="allocation">Allocation</TabsTrigger>
+          <TabsTrigger value="spending">Spending</TabsTrigger>
           <TabsTrigger value="comparison">Comparison</TabsTrigger>
         </TabsList>
 
@@ -546,6 +583,49 @@ export function BudgetTracker() {
                         nameKey="name"
                       >
                         {pieData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name]} />
+                      <Legend
+                        formatter={(value: string) => (
+                          <span className="text-xs">{value}</span>
+                        )}
+                        wrapperStyle={{ fontSize: '12px' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="spending">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Actual Spending by Category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {spendingData.length === 0 ? (
+                <p className="text-center text-sm text-muted-foreground py-8">
+                  No expenses recorded yet. Add expenses to see spending breakdown.
+                </p>
+              ) : (
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={spendingData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={110}
+                        paddingAngle={2}
+                        dataKey="value"
+                        nameKey="name"
+                      >
+                        {spendingData.map((entry) => (
                           <Cell key={entry.name} fill={entry.color} />
                         ))}
                       </Pie>
@@ -596,8 +676,16 @@ export function BudgetTracker() {
                         )}
                         wrapperStyle={{ fontSize: '12px' }}
                       />
-                      <Bar dataKey="budgeted" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="spent" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="budgeted" radius={[4, 4, 0, 0]} fillOpacity={0.35}>
+                        {barData.map((entry, i) => (
+                          <Cell key={`b-${i}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                      <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
+                        {barData.map((entry, i) => (
+                          <Cell key={`s-${i}`} fill={entry.color} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -636,6 +724,15 @@ export function BudgetTracker() {
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold truncate">{cat.name}</h3>
                         <div className="flex items-center gap-1 ml-2 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => openAddExpense(cat.id)}
+                          >
+                            <Plus className="mr-1 h-3 w-3" />
+                            Expense
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -708,6 +805,17 @@ export function BudgetTracker() {
                           {Math.round(catPct)}%
                         </span>
                       </div>
+
+                      {/* Expense count summary (always visible) */}
+                      {cat.expenses.length > 0 && (
+                        <button
+                          onClick={() => toggleExpand(cat.id)}
+                          className="mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {cat.expenses.length} expense{cat.expenses.length !== 1 ? 's' : ''} &middot;{' '}
+                          {formatCurrency(cat.expenses.reduce((s, e) => s + e.amount, 0))} total
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -716,23 +824,9 @@ export function BudgetTracker() {
                     <>
                       <Separator className="my-4" />
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-medium text-muted-foreground">
-                            Expenses ({cat.expenses.length})
-                          </h4>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openAddExpense(cat.id)}
-                          >
-                            <Plus className="mr-1 h-3 w-3" />
-                            Add Expense
-                          </Button>
-                        </div>
-
                         {cat.expenses.length === 0 ? (
                           <p className="py-4 text-center text-sm text-muted-foreground">
-                            No expenses recorded yet.
+                            No expenses recorded yet. Click &quot;Add Expense&quot; to get started.
                           </p>
                         ) : (
                           <div className="space-y-2">
