@@ -54,3 +54,13 @@ server.log
 /skills/
 
 .env
+
+worklog.md
+
+prisma/
+tool-results/
+mini-services/
+examples/
+download/
+db/
+.zscripts/
