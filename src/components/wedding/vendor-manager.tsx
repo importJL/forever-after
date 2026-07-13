@@ -33,8 +33,10 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useWeddingStore, type Vendor } from '@/lib/store'
+import { ImportCsvDialog } from '@/components/wedding/import-csv-dialog'
 import { LocationLink } from '@/components/map/location-link'
 import {
+  Upload,
   Plus,
   Search,
   Star,
@@ -149,6 +151,7 @@ export function VendorManager() {
   const [formData, setFormData] = useState(emptyVendor)
   const [hoverRating, setHoverRating] = useState(0)
   const [deleteConfirmVendor, setDeleteConfirmVendor] = useState<Vendor | null>(null)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
 
   const filteredVendors = useMemo(() => {
     return vendors.filter((v) => {
@@ -247,6 +250,12 @@ export function VendorManager() {
     }
   }
 
+  const handleImportVendors = (data: unknown[]) => {
+    const store = useWeddingStore.getState()
+    store.setVendors(data as Vendor[])
+    toast.success(`Imported ${data.length} vendor(s)`)
+  }
+
   const handleDelete = async () => {
     if (!deleteConfirmVendor) return
     try {
@@ -272,10 +281,16 @@ export function VendorManager() {
           <Store className="h-7 w-7 text-rose-500" />
           <h1 className="text-2xl font-bold text-gray-900">Vendor Management</h1>
         </div>
-        <Button onClick={openCreateDialog} className="bg-rose-500 hover:bg-rose-600">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Vendor
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Import CSV
+          </Button>
+          <Button onClick={openCreateDialog} className="bg-rose-500 hover:bg-rose-600">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Vendor
+          </Button>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -691,6 +706,15 @@ export function VendorManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Import CSV Dialog */}
+      <ImportCsvDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        targetModule="vendors"
+        onImport={handleImportVendors}
+        title="Import Vendors from CSV"
+      />
     </div>
   )
 }

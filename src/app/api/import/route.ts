@@ -52,6 +52,82 @@ interface CsvRow {
   Remarks?: unknown
 }
 
+interface TaskCsvRow {
+  Timeline?: unknown
+  Task?: unknown
+  Topic?: unknown
+}
+
+interface VendorCsvRow {
+  Categories?: unknown
+  Company?: unknown
+  Content?: unknown
+  Remark?: unknown
+  'Reference Rate'?: unknown
+}
+
+const WEDDING_DATE = new Date(2027, 4, 15)
+
+function parseTimelineToDueDate(timeline: string): string {
+  if (!timeline) return ''
+  const match = timeline.match(/(\d+)/)
+  if (!match) return ''
+  const amount = parseInt(match[1], 10)
+  const date = new Date(WEDDING_DATE)
+  if (timeline.includes('day')) {
+    date.setDate(date.getDate() - amount)
+  } else if (timeline.includes('week')) {
+    date.setDate(date.getDate() - amount * 7)
+  } else if (timeline.includes('month')) {
+    date.setMonth(date.getMonth() - amount)
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function parsePrice(value: unknown): number {
+  const str = parseString(value)
+  if (!str) return 0
+  const match = str.match(/(\d+)/)
+  return match ? parseInt(match[1], 10) : 0
+}
+
+function mapCsvRowToTask(row: TaskCsvRow, index: number) {
+  return {
+    title: parseString(row.Task),
+    description: '',
+    category: parseString(row.Topic) || 'Other',
+    priority: 'medium',
+    status: 'todo',
+    dueDate: parseTimelineToDueDate(parseString(row.Timeline)),
+    assignee: '',
+    notes: '',
+    sortOrder: index,
+  }
+}
+
+function mapCsvRowToVendor(row: VendorCsvRow) {
+  const content = parseString(row.Content)
+  const remark = parseString(row.Remark)
+  const notes = [content, remark].filter(Boolean).join(' - ')
+  return {
+    name: parseString(row.Company),
+    category: parseString(row.Categories),
+    contactPerson: '',
+    email: '',
+    phone: '',
+    website: '',
+    address: '',
+    district: '',
+    city: 'Hong Kong',
+    price: parsePrice(row['Reference Rate']),
+    depositPaid: 0,
+    status: 'considering',
+    rating: 0,
+    notes,
+    contractDate: '',
+  }
+}
+
 function mapCsvRowToGuest(row: CsvRow) {
   return {
     name: parseString(row['Guest Name']),
@@ -227,6 +303,38 @@ export async function POST(request: NextRequest) {
         data: created,
         count: created.length,
         setupData,
+        targetModule,
+      })
+    }
+
+    // Handle confirmed task import
+    if (isConfirm && targetModule === 'tasks' && Array.isArray(parsedData)) {
+      const tasks = (parsedData as Record<string, unknown>[]).map((row, i) =>
+        mapCsvRowToTask(row as TaskCsvRow, i)
+      )
+      const created = await Promise.all(
+        tasks.map((t) => db.task.create({ data: t }))
+      )
+      return NextResponse.json({
+        success: true,
+        data: created,
+        count: created.length,
+        targetModule,
+      })
+    }
+
+    // Handle confirmed vendor import
+    if (isConfirm && targetModule === 'vendors' && Array.isArray(parsedData)) {
+      const vendors = (parsedData as Record<string, unknown>[]).map((row) =>
+        mapCsvRowToVendor(row as VendorCsvRow)
+      )
+      const created = await Promise.all(
+        vendors.map((v) => db.vendor.create({ data: v }))
+      )
+      return NextResponse.json({
+        success: true,
+        data: created,
+        count: created.length,
         targetModule,
       })
     }

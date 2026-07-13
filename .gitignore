@@ -64,3 +64,5 @@ examples/
 download/
 db/
 .zscripts/
+
+*.csv

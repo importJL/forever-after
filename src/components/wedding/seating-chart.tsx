@@ -170,7 +170,7 @@ function GuestChip({
       {...listeners}
       {...attributes}
       className={cn(
-        'group/gc flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-150 cursor-grab active:cursor-grabbing select-none',
+        'group/gc flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-150 cursor-grab active:cursor-grabbing select-none touch-none',
         isDragging && 'opacity-0',
         isAssigned
           ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:border-rose-300 dark:hover:border-rose-700 hover:shadow-sm'
@@ -219,6 +219,7 @@ function FloorTableStandalone({
   onDelete,
   onStartEdit,
   onMouseDown,
+  onTouchStart,
 }: {
   table: TablesWithGuestItem
   index: number
@@ -229,6 +230,7 @@ function FloorTableStandalone({
   onDelete: (tableId: string, tableNumber: number) => void
   onStartEdit: (id: string, capacity: number, label: string) => void
   onMouseDown: (e: React.MouseEvent, id: string) => void
+  onTouchStart?: (e: React.TouchEvent, id: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: table.id })
   const colorClass = getTableColor(index)
@@ -404,7 +406,7 @@ export function SeatingChart() {
     } catch { return null }
   })
   const [tablePositions, setTablePositions] = useState<TablePosition[]>(initialPositions ?? [])
-  const [isLoaded] = useState(initialPositions !== null)
+  const [isLoaded] = useState(true)
   const floorPlanRef = useRef<HTMLDivElement>(null)
 
   // UI state
@@ -951,6 +953,7 @@ export function SeatingChart() {
                     onSelect={handleSelectTable}
                     onDelete={confirmDeleteTable}
                     onStartEdit={(id, capacity, label) => {
+                      handleSelectTable(id)
                       setEditingTableId(id)
                       setEditCapacity(String(capacity))
                       setEditLabel(label)
@@ -963,95 +966,6 @@ export function SeatingChart() {
                 <div style={{ minHeight: Math.max(FLOOR_PLAN_MIN_H, ...tablePositions.map((t) => t.y + 250)) }} />
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Guest Assignment Panel */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Users className="h-4 w-4 text-rose-500" />
-                Guest Pool
-                <Badge variant="secondary" className="text-[10px]">
-                  {totalGuests} guests · {totalAssigned} assigned
-                </Badge>
-              </CardTitle>
-              <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Accepted</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" /> Pending</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Declined</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-500" /> Maybe</span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="max-h-[400px]">
-              <div className="p-4 space-y-3">
-                {/* RSVP Groups */}
-                {(['accepted', 'pending', 'declined', 'maybe'] as const).map((status) => {
-                  const groupGuests = guestsByRsvp[status]
-                  const rsvp = RSVP_CONFIG[status]
-                  const isOpen = rsvpGroupOpen.has(status)
-                  const assignedInGroup = groupGuests.filter((g) => g.tableNumber > 0).length
-
-                  if (groupGuests.length === 0) return null
-
-                  return (
-                    <div key={status}>
-                      <button
-                        className="w-full flex items-center gap-2 py-2 px-1 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
-                        onClick={() => toggleRsvpGroup(status)}
-                      >
-                        <ChevronDown className={cn('h-3.5 w-3.5 text-gray-400 transition-transform', !isOpen && '-rotate-90')} />
-                        <span className={cn('h-2.5 w-2.5 rounded-full', rsvp.dotClass)} />
-                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{rsvp.label}</span>
-                        <Badge variant="secondary" className="text-[10px] h-5">{groupGuests.length}</Badge>
-                        {assignedInGroup > 0 && (
-                          <Badge className="text-[10px] h-5 bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800">
-                            🪑 {assignedInGroup} seated
-                          </Badge>
-                        )}
-                        <span className="ml-auto text-[11px] text-gray-400 dark:text-gray-500">
-                          {isOpen ? 'Collapse' : `${groupGuests.length} guests`}
-                        </span>
-                      </button>
-                      <AnimatePresence>
-                        {isOpen && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 pt-2 pl-5">
-                              {groupGuests.map((g) => (
-                                <GuestChip
-                                  key={g.id}
-                                  guest={g}
-                                  showTable={true}
-                                  tablesWithGuests={tablesWithGuests}
-                                  onUnassign={unassignGuest}
-                                />
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )
-                })}
-
-                {totalGuests === 0 && (
-                  <div className="text-center py-8">
-                    <Users className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No guests yet</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Add guests in the Guest Manager first</p>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
           </CardContent>
         </Card>
 
@@ -1103,7 +1017,11 @@ export function SeatingChart() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0 text-gray-500 hover:text-gray-700"
-                        onClick={() => handleSelectTable(selectedTable.id)}
+                        onClick={() => {
+                          handleUpdateTable(selectedTable.id, { label: editLabel, capacity: parseInt(editCapacity, 10) || selectedTable.capacity })
+                          setSelectedTableId(null)
+                          setEditingTableId(null)
+                        }}
                       >
                         <X className="h-3.5 w-3.5" />
                       </Button>
@@ -1276,6 +1194,95 @@ export function SeatingChart() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Guest Assignment Panel */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Users className="h-4 w-4 text-rose-500" />
+                Guest Pool
+                <Badge variant="secondary" className="text-[10px]">
+                  {totalGuests} guests · {totalAssigned} assigned
+                </Badge>
+              </CardTitle>
+              <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Accepted</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" /> Pending</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Declined</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-500" /> Maybe</span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ScrollArea className="max-h-[400px]">
+              <div className="p-4 space-y-3">
+                {/* RSVP Groups */}
+                {(['accepted', 'pending', 'declined', 'maybe'] as const).map((status) => {
+                  const groupGuests = guestsByRsvp[status]
+                  const rsvp = RSVP_CONFIG[status]
+                  const isOpen = rsvpGroupOpen.has(status)
+                  const assignedInGroup = groupGuests.filter((g) => g.tableNumber > 0).length
+
+                  if (groupGuests.length === 0) return null
+
+                  return (
+                    <div key={status}>
+                      <button
+                        className="w-full flex items-center gap-2 py-2 px-1 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
+                        onClick={() => toggleRsvpGroup(status)}
+                      >
+                        <ChevronDown className={cn('h-3.5 w-3.5 text-gray-400 transition-transform', !isOpen && '-rotate-90')} />
+                        <span className={cn('h-2.5 w-2.5 rounded-full', rsvp.dotClass)} />
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{rsvp.label}</span>
+                        <Badge variant="secondary" className="text-[10px] h-5">{groupGuests.length}</Badge>
+                        {assignedInGroup > 0 && (
+                          <Badge className="text-[10px] h-5 bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800">
+                            🪑 {assignedInGroup} seated
+                          </Badge>
+                        )}
+                        <span className="ml-auto text-[11px] text-gray-400 dark:text-gray-500">
+                          {isOpen ? 'Collapse' : `${groupGuests.length} guests`}
+                        </span>
+                      </button>
+                      <AnimatePresence>
+                        {isOpen && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 pt-2 pl-5">
+                              {groupGuests.map((g) => (
+                                <GuestChip
+                                  key={g.id}
+                                  guest={g}
+                                  showTable={true}
+                                  tablesWithGuests={tablesWithGuests}
+                                  onUnassign={unassignGuest}
+                                />
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )
+                })}
+
+                {totalGuests === 0 && (
+                  <div className="text-center py-8">
+                    <Users className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No guests yet</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Add guests in the Guest Manager first</p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
 
         {/* Add Table Dialog */}
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>

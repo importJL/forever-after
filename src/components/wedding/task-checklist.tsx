@@ -43,6 +43,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { useWeddingStore, type Task } from '@/lib/store'
+import { ImportCsvDialog } from '@/components/wedding/import-csv-dialog'
 import {
   DndContext,
   DragOverlay,
@@ -63,6 +64,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isBefore, startOfDay } from 'date-fns'
 import {
+  Upload,
   Plus,
   Search,
   Filter,
@@ -312,6 +314,7 @@ export function TaskChecklist() {
   const [openCategories, setOpenCategories] = useState<Set<string>>(new Set(TASK_CATEGORIES))
   const [timelineMonth, setTimelineMonth] = useState(new Date())
   const [deleteConfirmTask, setDeleteConfirmTask] = useState<Task | null>(null)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -534,6 +537,12 @@ export function TaskChecklist() {
     } catch { toast.error('Failed to update task') }
   }
 
+  const handleImportTasks = (data: unknown[]) => {
+    const store = useWeddingStore.getState()
+    store.setTasks(data as Task[])
+    toast.success(`Imported ${data.length} task(s)`)
+  }
+
   const toggleCategory = (cat: string) => {
     setOpenCategories((prev) => {
       const next = new Set(prev)
@@ -564,6 +573,14 @@ export function TaskChecklist() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportDialogOpen(true)}
+            >
+              <Upload className="h-3.5 w-3.5 mr-1.5" />
+              Import CSV
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -1188,6 +1205,15 @@ export function TaskChecklist() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Import CSV Dialog */}
+        <ImportCsvDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          targetModule="tasks"
+          onImport={handleImportTasks}
+          title="Import Tasks from CSV"
+        />
       </div>
     </TooltipProvider>
   )

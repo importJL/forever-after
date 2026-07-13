@@ -294,9 +294,14 @@ export function FileImport() {
       const data = await res.json()
       const rowCount = data.count ?? previewData?.rows.length ?? 0
 
-      // Update Zustand store with imported guests
       if (data.data && Array.isArray(data.data)) {
-        useWeddingStore.getState().setGuests(data.data)
+        if (targetModule === 'tasks') {
+          useWeddingStore.getState().setTasks(data.data)
+        } else if (targetModule === 'vendors') {
+          useWeddingStore.getState().setVendors(data.data)
+        } else {
+          useWeddingStore.getState().setGuests(data.data)
+        }
       }
 
       // Update Zustand store with setup data
@@ -316,7 +321,8 @@ export function FileImport() {
         ...prev,
       ])
 
-      toast.success(`Successfully imported ${rowCount} guest(s).`)
+      const moduleLabel = targetModule === 'tasks' ? 'task(s)' : targetModule === 'vendors' ? 'vendor(s)' : 'guest(s)'
+      toast.success(`Successfully imported ${rowCount} ${moduleLabel}.`)
       clearFile()
     } catch (err) {
       setImportHistory((prev) => [
