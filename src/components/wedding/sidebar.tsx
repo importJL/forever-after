@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import { LocationLink } from '@/components/map/location-link'
+import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard,
   Users,
@@ -31,6 +32,7 @@ import {
   Sun,
   Moon,
   Download,
+  LogOut,
 } from 'lucide-react'
 
 interface NavItem {
@@ -241,6 +243,25 @@ export function WeddingSidebar() {
             </Button>
           </TooltipTrigger>
           {(!sidebarOpen) && <TooltipContent side="right">Export Backup</TooltipContent>}
+        </Tooltip>
+
+        {/* Sign Out */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'w-full h-9 text-muted-foreground hover:text-destructive gap-2',
+                !sidebarOpen && 'justify-center px-0'
+              )}
+              onClick={() => signOut({ callbackUrl: window.location.origin })}
+            >
+              <LogOut className="w-4 h-4" />
+              {sidebarOpen && <span className="text-xs">Sign Out</span>}
+            </Button>
+          </TooltipTrigger>
+          {(!sidebarOpen) && <TooltipContent side="right">Sign Out</TooltipContent>}
         </Tooltip>
 
         {/* Collapse */}
