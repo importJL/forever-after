@@ -112,6 +112,7 @@ export interface TimelineEvent {
   description: string
   startTime: string
   endTime: string
+  eventDate: string
   location: string
   category: string
   notes: string
@@ -127,6 +128,11 @@ export interface MediaItem {
   category: string
   notes: string
   sortOrder: number
+  source: string
+  tags: string
+  location: string
+  date: string
+  color: string
 }
 
 export interface WebLink {
@@ -208,6 +214,8 @@ interface WeddingStore {
   deleteVendor: (id: string) => void
 
   // Timeline
+  timelineViewType: 'gantt' | 'timeline'
+  setTimelineViewType: (type: 'gantt' | 'timeline') => void
   timelineEvents: TimelineEvent[]
   setTimelineEvents: (events: TimelineEvent[]) => void
   addTimelineEvent: (event: TimelineEvent) => void
@@ -338,6 +346,8 @@ export const useWeddingStore = create<WeddingStore>((set) => ({
   deleteVendor: (id) => set((s) => ({ vendors: s.vendors.filter((v) => v.id !== id) })),
 
   // Timeline
+  timelineViewType: 'timeline',
+  setTimelineViewType: (timelineViewType) => set({ timelineViewType }),
   timelineEvents: [],
   setTimelineEvents: (timelineEvents) => set({ timelineEvents }),
   addTimelineEvent: (event) => set((s) => ({ timelineEvents: [...s.timelineEvents, event] })),

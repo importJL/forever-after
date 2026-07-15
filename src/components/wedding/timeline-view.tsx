@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +12,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
@@ -32,8 +34,13 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+
 import { useWeddingStore, type TimelineEvent } from '@/lib/store'
-import { Plus, Clock, MapPin, Edit, Trash2, Calendar } from 'lucide-react'
+import {
+  Plus, Clock, MapPin, Edit, Trash2, Calendar,
+  ChevronLeft, ChevronRight,
+  BarChart3, ListChecks,
+} from 'lucide-react'
 
 const TIMELINE_CATEGORIES = [
   { value: 'ceremony', label: 'Ceremony' },
@@ -55,6 +62,18 @@ const CATEGORY_COLORS: Record<string, { dot: string; bg: string; text: string }>
   other: { dot: 'bg-slate-400', bg: 'bg-slate-50', text: 'text-slate-700' },
 }
 
+const CATEGORY_CSS: Record<string, { bg: string; text: string; border: string; light: string }> = {
+  ceremony: { bg: '#fff1f2', text: '#be123c', border: '#e11d48', light: '#fecdd3' },
+  reception: { bg: '#fffbeb', text: '#b45309', border: '#f59e0b', light: '#fde68a' },
+  photos: { bg: '#f5f3ff', text: '#6d28d9', border: '#8b5cf6', light: '#c4b5fd' },
+  cocktail: { bg: '#f0f9ff', text: '#0369a1', border: '#0ea5e9', light: '#bae6fd' },
+  dinner: { bg: '#ecfdf5', text: '#047857', border: '#10b981', light: '#a7f3d0' },
+  dancing: { bg: '#fdf2f8', text: '#be185d', border: '#ec4899', light: '#f9a8d4' },
+  other: { bg: '#f8fafc', text: '#334155', border: '#64748b', light: '#cbd5e1' },
+}
+
+type GanttZoom = 'day' | 'month' | 'year'
+
 function formatTime(time: string) {
   if (!time) return ''
   const [h, m] = time.split(':').map(Number)
@@ -69,11 +88,45 @@ function formatTimeRange(start: string, end: string) {
   return `${formatTime(start)} – ${formatTime(end)}`
 }
 
+function timeToDecimal(time: string): number {
+  if (!time) return -1
+  const [h, m] = time.split(':').map(Number)
+  return h + m / 60
+}
+
+function formatHour(h: number) {
+  if (h === 0) return '12AM'
+  if (h < 12) return `${h}AM`
+  if (h === 12) return '12PM'
+  return `${h - 12}PM`
+}
+
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate()
+}
+
+function getMonthName(month: number) {
+  return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month]
+}
+
+function getFullMonthName(month: number) {
+  return ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month]
+}
+
+function eventDateLabel(event: TimelineEvent) {
+  if (event.eventDate) {
+    const d = new Date(event.eventDate + 'T00:00:00')
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+  return null
+}
+
 const emptyEvent: Omit<TimelineEvent, 'id' | 'sortOrder'> = {
   title: '',
   description: '',
   startTime: '',
   endTime: '',
+  eventDate: '',
   location: '',
   category: 'other',
   notes: '',
@@ -85,13 +138,34 @@ export function TimelineView() {
   const addTimelineEvent = useWeddingStore((s) => s.addTimelineEvent)
   const updateTimelineEvent = useWeddingStore((s) => s.updateTimelineEvent)
   const deleteTimelineEvent = useWeddingStore((s) => s.deleteTimelineEvent)
+  const viewType = useWeddingStore((s) => s.timelineViewType)
+  const setViewType = useWeddingStore((s) => s.setTimelineViewType)
+  const wedding = useWeddingStore((s) => s.wedding)
+
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<TimelineEvent | null>(null)
   const [formData, setFormData] = useState(emptyEvent)
   const [deleteConfirmEvent, setDeleteConfirmEvent] = useState<TimelineEvent | null>(null)
 
+  const [ganttZoom, setGanttZoom] = useState<GanttZoom>('day')
+  const [ganttNavOffset, setGanttNavOffset] = useState(0)
+
+  const refDate = useMemo(() => {
+    if (wedding.date) return new Date(wedding.date + 'T00:00:00')
+    return new Date()
+  }, [wedding.date])
+
+  const ganttDate = useMemo(() => {
+    const d = new Date(refDate)
+    d.setMonth(d.getMonth() + ganttNavOffset)
+    return d
+  }, [refDate, ganttNavOffset])
+
   const sortedEvents = useMemo(() => {
     return [...events].sort((a, b) => {
+      if (a.eventDate && b.eventDate && a.eventDate !== b.eventDate) {
+        return a.eventDate.localeCompare(b.eventDate)
+      }
       if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime)
       if (a.startTime) return -1
       if (b.startTime) return 1
@@ -101,30 +175,30 @@ export function TimelineView() {
 
   const openCreateDialog = () => {
     setEditingEvent(null)
-    setFormData(emptyEvent)
+    setFormData({ ...emptyEvent, eventDate: wedding.date || '' })
     setDialogOpen(true)
   }
 
-  const openEditDialog = (event: TimelineEvent) => {
+  const openEditDialog = useCallback((event: TimelineEvent) => {
     setEditingEvent(event)
     setFormData({
       title: event.title,
       description: event.description,
       startTime: event.startTime,
       endTime: event.endTime,
+      eventDate: event.eventDate ?? '',
       location: event.location,
       category: event.category,
       notes: event.notes,
     })
     setDialogOpen(true)
-  }
+  }, [])
 
   const handleSave = async () => {
     if (!formData.title.trim()) {
       toast.error('Event title is required')
       return
     }
-
     try {
       if (editingEvent) {
         const res = await fetch(`/api/timeline/${editingEvent.id}`, {
@@ -176,56 +250,374 @@ export function TimelineView() {
     }
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Calendar className="h-7 w-7 text-rose-500" />
-          <h1 className="text-2xl font-bold text-gray-900">Wedding Day Timeline</h1>
-          {events.length > 0 && (
-            <Badge variant="secondary" className="ml-1">
-              {events.length} events
-            </Badge>
-          )}
-        </div>
-        <Button onClick={openCreateDialog} className="bg-rose-500 hover:bg-rose-600">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Event
-        </Button>
-      </div>
+  const eventsWithTime = useMemo(() => sortedEvents.filter((e) => e.startTime), [sortedEvents])
+  const eventsInMonth = useMemo(() => {
+    const year = ganttDate.getFullYear()
+    const month = ganttDate.getMonth()
+    return sortedEvents.filter((e) => {
+      if (!e.eventDate) return false
+      const d = new Date(e.eventDate + 'T00:00:00')
+      return d.getFullYear() === year && d.getMonth() === month
+    })
+  }, [sortedEvents, ganttDate])
 
-      {/* Timeline */}
-      {sortedEvents.length > 0 ? (
-        <div className="relative">
-          {/* Vertical connecting line */}
-          <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-rose-300 via-amber-300 to-emerald-300" />
+  const eventsInYear = useMemo(() => {
+    const year = ganttDate.getFullYear()
+    return sortedEvents.filter((e) => {
+      if (!e.eventDate) return false
+      const d = new Date(e.eventDate + 'T00:00:00')
+      return d.getFullYear() === year
+    })
+  }, [sortedEvents, ganttDate])
 
-          <div className="space-y-6">
-            {sortedEvents.map((event, index) => {
-              const colors = CATEGORY_COLORS[event.category] || CATEGORY_COLORS.other
-              const categoryLabel =
-                TIMELINE_CATEGORIES.find((c) => c.value === event.category)?.label || event.category
-              const timeRange = formatTimeRange(event.startTime, event.endTime)
+  const navTitle = useMemo(() => {
+    if (ganttZoom === 'day') return 'Wedding Day'
+    if (ganttZoom === 'month') return `${getFullMonthName(ganttDate.getMonth())} ${ganttDate.getFullYear()}`
+    return `${ganttDate.getFullYear()}`
+  }, [ganttZoom, ganttDate])
 
-              return (
-                <div key={event.id} className="relative flex gap-5 group">
-                  {/* Timeline node */}
-                  <div className="relative z-10 flex flex-col items-center shrink-0">
+  // ── Gantt Intraday View ──────────────────────────────────────────────
+  const renderGanttDay = () => {
+    const hours = Array.from({ length: 24 }, (_, i) => i)
+
+    return (
+      <div className="overflow-x-auto pb-4">
+        <div className="min-w-[960px]">
+          {/* Time axis */}
+          <div className="flex border-b border-border mb-2">
+            <div className="w-32 shrink-0" />
+            {hours.map((h) => (
+              <div key={h} className="flex-1 text-[10px] text-muted-foreground pb-1 text-center border-l border-border/50">
+                {formatHour(h)}
+              </div>
+            ))}
+          </div>
+
+          {/* Event rows */}
+          <div className="space-y-2">
+            {eventsWithTime.length > 0 ? (
+              eventsWithTime.map((event) => {
+                const start = timeToDecimal(event.startTime)
+                const end = event.endTime ? timeToDecimal(event.endTime) : start + 1
+                const left = (start / 24) * 100
+                const width = Math.max(((end - start) / 24) * 100, 5)
+                const css = CATEGORY_CSS[event.category] || CATEGORY_CSS.other
+
+                return (
+                  <div key={event.id} className="relative h-11 group/bar">
+                    {/* Grid lines */}
+                    {hours.map((h) => (
+                      <div key={h} className="absolute inset-y-0 border-l border-border/30" style={{ left: `${(h / 24) * 100}%` }} />
+                    ))}
+                    {/* Event bar */}
                     <div
-                      className={`w-10 h-10 rounded-full ${colors.bg} border-2 border-white shadow-md flex items-center justify-center`}
+                      className="absolute inset-y-0 flex items-center cursor-pointer rounded-md px-2.5 transition-all duration-150 hover:shadow-lg hover:ring-2 hover:ring-rose-200 truncate text-sm font-medium"
+                      style={{
+                        left: `${left}%`,
+                        width: `${width}%`,
+                        backgroundColor: css.bg,
+                        color: css.text,
+                        borderLeft: `3px solid ${css.border}`,
+                      }}
+                      onClick={() => openEditDialog(event)}
                     >
-                      <div className={`w-3 h-3 rounded-full ${colors.dot}`} />
+                      <span className="truncate">{event.title}</span>
+                      <span className="ml-auto shrink-0 text-[10px] opacity-60 hidden sm:inline">
+                        {formatTime(event.startTime)}
+                      </span>
                     </div>
                   </div>
+                )
+              })
+            ) : (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                No timed events yet. Add events with start/end times to see them here.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-                  {/* Event card */}
-                  <Card className="flex-1 group-hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-semibold text-gray-900">{event.title}</h3>
+  // ── Gantt Month View ──────────────────────────────────────────────
+  const renderGanttMonth = () => {
+    const year = ganttDate.getFullYear()
+    const month = ganttDate.getMonth()
+    const daysInMonth = getDaysInMonth(year, month)
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+
+    if (eventsInMonth.length === 0) {
+      return (
+        <div className="py-12 text-center text-sm text-muted-foreground">
+          No events in {getFullMonthName(month)} {year}.
+        </div>
+      )
+    }
+
+    return (
+      <div className="overflow-x-auto pb-4">
+        <div className="min-w-[800px]">
+          {/* Day headers */}
+          <div className="flex border-b border-border mb-2">
+            <div className="w-36 shrink-0" />
+            {days.map((d) => {
+              const date = new Date(year, month, d)
+              const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+              const isToday = new Date().toDateString() === date.toDateString()
+              return (
+                <div
+                  key={d}
+                  className={`flex-1 text-[10px] text-center pb-1 border-l border-border/50 ${isToday ? 'text-rose-600 font-semibold' : 'text-muted-foreground'}`}
+                >
+                  <span className="block">{d}</span>
+                  <span className="block text-[8px] opacity-60">{dayName}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Event rows */}
+          <div className="space-y-2">
+            {eventsInMonth.map((event) => {
+              const d = new Date(event.eventDate + 'T00:00:00')
+              const dayOfMonth = d.getDate()
+              const left = ((dayOfMonth - 1) / daysInMonth) * 100
+              const width = (1 / daysInMonth) * 100
+              const css = CATEGORY_CSS[event.category] || CATEGORY_CSS.other
+
+              return (
+                <div key={event.id} className="relative h-11 group/bar">
+                  {days.map((d) => (
+                    <div key={d} className="absolute inset-y-0 border-l border-border/30" style={{ left: `${((d - 1) / daysInMonth) * 100}%` }} />
+                  ))}
+                  <div
+                    className="absolute inset-y-0 flex items-center cursor-pointer rounded-md px-2 transition-all duration-150 hover:shadow-lg hover:ring-2 hover:ring-rose-200 truncate text-sm font-medium"
+                    style={{
+                      left: `${left}%`,
+                      width: `${width}%`,
+                      backgroundColor: css.bg,
+                      color: css.text,
+                      borderLeft: `3px solid ${css.border}`,
+                    }}
+                    onClick={() => openEditDialog(event)}
+                  >
+                    <span className="truncate">{event.title}</span>
+                    <span className="ml-auto shrink-0 text-[10px] opacity-60 hidden sm:inline">
+                      {event.startTime ? formatTime(event.startTime) : ''}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Gantt Year View ──────────────────────────────────────────────
+  const renderGanttYear = () => {
+    const year = ganttDate.getFullYear()
+    const months = Array.from({ length: 12 }, (_, i) => i)
+
+    if (eventsInYear.length === 0) {
+      return (
+        <div className="py-12 text-center text-sm text-muted-foreground">
+          No events in {year}.
+        </div>
+      )
+    }
+
+    return (
+      <div className="overflow-x-auto pb-4">
+        <div className="min-w-[800px]">
+          {/* Month headers */}
+          <div className="flex border-b border-border mb-2">
+            <div className="w-36 shrink-0" />
+            {months.map((m) => {
+              const isCurrent = new Date().getFullYear() === year && new Date().getMonth() === m
+              return (
+                <div
+                  key={m}
+                  className={`flex-1 text-[10px] text-center pb-1 border-l border-border/50 ${isCurrent ? 'text-rose-600 font-semibold' : 'text-muted-foreground'}`}
+                >
+                  {getMonthName(m)}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Event rows */}
+          <div className="space-y-2">
+            {eventsInYear.map((event) => {
+              const d = new Date(event.eventDate + 'T00:00:00')
+              const m = d.getMonth()
+              const left = (m / 12) * 100
+              const width = (1 / 12) * 100
+              const css = CATEGORY_CSS[event.category] || CATEGORY_CSS.other
+
+              return (
+                <div key={event.id} className="relative h-11 group/bar">
+                  {months.map((m) => (
+                    <div key={m} className="absolute inset-y-0 border-l border-border/30" style={{ left: `${(m / 12) * 100}%` }} />
+                  ))}
+                  <div
+                    className="absolute inset-y-0 flex items-center cursor-pointer rounded-md px-2 transition-all duration-150 hover:shadow-lg hover:ring-2 hover:ring-rose-200 truncate text-sm font-medium"
+                    style={{
+                      left: `${left}%`,
+                      width: `${width}%`,
+                      backgroundColor: css.bg,
+                      color: css.text,
+                      borderLeft: `3px solid ${css.border}`,
+                    }}
+                    onClick={() => openEditDialog(event)}
+                  >
+                    <span className="truncate">{event.title}</span>
+                    <span className="ml-auto shrink-0 text-[10px] opacity-60 hidden sm:inline">
+                      {getMonthName(d.getMonth())} {d.getDate()}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Gantt View ──────────────────────────────────────────────────
+  const renderGanttView = () => {
+    const canNavPrev = ganttZoom !== 'day'
+    const canNavNext = ganttZoom !== 'day'
+
+    return (
+      <div className="space-y-4">
+        {/* Gantt controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border bg-muted/30 p-0.5">
+              {(['day', 'month', 'year'] as GanttZoom[]).map((z) => (
+                <button
+                  key={z}
+                  onClick={() => { setGanttZoom(z); setGanttNavOffset(0) }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    ganttZoom === z
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {z === 'day' ? 'Day' : z === 'month' ? 'Month' : 'Year'}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 text-sm font-medium text-foreground ml-2">
+              {canNavPrev && (
+                <button
+                  onClick={() => setGanttNavOffset((p) => p - 1)}
+                  className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              )}
+              <span className="min-w-[120px] text-center">{navTitle}</span>
+              {canNavNext && (
+                <button
+                  onClick={() => setGanttNavOffset((p) => p + 1)}
+                  className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <Button onClick={openCreateDialog} className="bg-rose-500 hover:bg-rose-600 shrink-0">
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add Event
+          </Button>
+        </div>
+
+        {/* Gantt chart */}
+        {ganttZoom === 'day' && renderGanttDay()}
+        {ganttZoom === 'month' && renderGanttMonth()}
+        {ganttZoom === 'year' && renderGanttYear()}
+
+        {/* Unscheduled events */}
+        {ganttZoom !== 'day' && (() => {
+          const unscheduled = sortedEvents.filter((e) => !e.eventDate)
+          if (unscheduled.length === 0) return null
+          return (
+            <div className="border-t border-border pt-4 mt-4">
+              <p className="text-xs text-muted-foreground mb-2 font-medium">Unscheduled (no date set)</p>
+              <div className="flex flex-wrap gap-2">
+                {unscheduled.map((event) => {
+                  const colors = CATEGORY_COLORS[event.category] || CATEGORY_COLORS.other
+                  return (
+                    <Badge
+                      key={event.id}
+                      variant="outline"
+                      className={`cursor-pointer ${colors.bg} ${colors.text} border-transparent`}
+                      onClick={() => openEditDialog(event)}
+                    >
+                      {event.title}
+                    </Badge>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+      </div>
+    )
+  }
+
+  // ── Center Timeline View ──────────────────────────────────────────
+  const renderCenterTimeline = () => {
+    if (sortedEvents.length === 0) {
+      return (
+        <div className="text-center py-16">
+          <Calendar className="h-16 w-16 text-gray-200 dark:text-gray-700 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-500 dark:text-gray-400">No events yet</h3>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-2 max-w-md mx-auto">
+            Plan your perfect wedding day by adding events to the timeline.
+          </p>
+          <Button onClick={openCreateDialog} className="mt-6 bg-rose-500 hover:bg-rose-600">
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add Your First Event
+          </Button>
+        </div>
+      )
+    }
+
+    return (
+      <div className="relative px-4">
+        {/* Center connecting line */}
+        <div className="absolute left-1/2 -translate-x-px top-0 bottom-0 w-0.5 bg-gradient-to-b from-rose-300 via-amber-300 to-emerald-300" />
+
+        <div className="space-y-10">
+          {sortedEvents.map((event, index) => {
+            const colors = CATEGORY_COLORS[event.category] || CATEGORY_COLORS.other
+            const css = CATEGORY_CSS[event.category] || CATEGORY_CSS.other
+            const categoryLabel = TIMELINE_CATEGORIES.find((c) => c.value === event.category)?.label || event.category
+            const timeRange = formatTimeRange(event.startTime, event.endTime)
+            const isLeft = index % 2 === 0
+            const dateLabel = eventDateLabel(event)
+
+            return (
+              <div key={event.id} className="relative group grid grid-cols-[1fr_auto_1fr] gap-8 items-start">
+                {/* Left column: card (even) or spacer (odd) */}
+                <div className="flex justify-end">
+                  {isLeft ? (
+                    <Card
+                      className="overflow-hidden border-0 shadow-md transition-all duration-200 group-hover:shadow-xl w-full max-w-md"
+                      style={{ borderRight: `3px solid ${css.border}` }}
+                    >
+                      <CardContent className="p-4">
+                        <div className="text-right">
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{event.title}</h3>
                             <Badge
                               variant="outline"
                               className={`text-xs ${colors.bg} ${colors.text} border-transparent`}
@@ -233,14 +625,91 @@ export function TimelineView() {
                               {categoryLabel}
                             </Badge>
                           </div>
+                          {dateLabel && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1 justify-end">
+                              <Calendar className="h-3 w-3" />
+                              <span>{dateLabel}</span>
+                            </div>
+                          )}
                           {timeRange && (
-                            <div className="flex items-center gap-1.5 text-sm text-gray-500 mt-1.5">
+                            <div className="flex items-center gap-1.5 text-sm text-gray-500 mt-1 justify-end">
                               <Clock className="h-3.5 w-3.5" />
                               <span>{timeRange}</span>
                             </div>
                           )}
                           {event.description && (
-                            <p className="text-sm text-gray-600 mt-1.5">{event.description}</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1.5 text-right">
+                              {event.description}
+                            </p>
+                          )}
+                          {event.location && (
+                            <div className="flex items-center gap-1.5 text-sm text-gray-500 mt-1.5 justify-end">
+                              <MapPin className="h-3.5 w-3.5" />
+                              <span>{event.location}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-start gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex-row-reverse">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(event)}>
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700"
+                            onClick={() => setDeleteConfirmEvent(event)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div />
+                  )}
+                </div>
+
+                {/* Center column: circle */}
+                <div className="relative z-10 flex justify-center">
+                  <div
+                    className={`w-12 h-12 rounded-full ${colors.bg} border-4 border-white dark:border-gray-900 shadow-md flex items-center justify-center transition-all duration-200 group-hover:ring-4 group-hover:ring-rose-200 group-hover:scale-110 group-hover:shadow-lg`}
+                  >
+                    <div className={`w-3.5 h-3.5 rounded-full ${colors.dot} transition-transform duration-200 group-hover:scale-125`} />
+                  </div>
+                </div>
+
+                {/* Right column: spacer (even) or card (odd) */}
+                <div className="flex justify-start">
+                  {!isLeft ? (
+                    <Card
+                      className="overflow-hidden border-0 shadow-md transition-all duration-200 group-hover:shadow-xl w-full max-w-md"
+                      style={{ borderLeft: `3px solid ${css.border}` }}
+                    >
+                      <CardContent className="p-4">
+                        <div className="text-left">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{event.title}</h3>
+                            <Badge
+                              variant="outline"
+                              className={`text-xs ${colors.bg} ${colors.text} border-transparent`}
+                            >
+                              {categoryLabel}
+                            </Badge>
+                          </div>
+                          {dateLabel && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
+                              <Calendar className="h-3 w-3" />
+                              <span>{dateLabel}</span>
+                            </div>
+                          )}
+                          {timeRange && (
+                            <div className="flex items-center gap-1.5 text-sm text-gray-500 mt-1">
+                              <Clock className="h-3.5 w-3.5" />
+                              <span>{timeRange}</span>
+                            </div>
+                          )}
+                          {event.description && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1.5">
+                              {event.description}
+                            </p>
                           )}
                           {event.location && (
                             <div className="flex items-center gap-1.5 text-sm text-gray-500 mt-1.5">
@@ -249,49 +718,94 @@ export function TimelineView() {
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => openEditDialog(event)}
-                          >
-                            <Edit className="h-4 w-4" />
+                        <div className="flex items-center justify-end gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(event)}>
+                            <Edit className="h-3.5 w-3.5" />
                           </Button>
                           <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-red-500 hover:text-red-700"
+                            variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700"
                             onClick={() => setDeleteConfirmEvent(event)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div />
+                  )}
                 </div>
-              )
-            })}
-          </div>
+              </div>
+            )
+          })}
         </div>
+      </div>
+    )
+  }
+
+  // ── Main Render ─────────────────────────────────────────────────
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-6 p-4 sm:p-6"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Calendar className="h-7 w-7 text-rose-500" />
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Wedding Day Timeline</h1>
+          {events.length > 0 && (
+            <Badge variant="secondary" className="ml-1">
+              {events.length} events
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* View Toggle */}
+      <div className="flex items-center justify-between">
+        <div className="flex rounded-lg border border-border bg-muted/30 p-0.5">
+          <button
+            onClick={() => setViewType('gantt')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              viewType === 'gantt'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Gantt Chart
+          </button>
+          <button
+            onClick={() => setViewType('timeline')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              viewType === 'timeline'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <ListChecks className="h-4 w-4" />
+            Center Timeline
+          </button>
+        </div>
+      </div>
+
+      {/* View Content */}
+      {viewType === 'gantt' ? (
+        renderGanttView()
       ) : (
-        /* Empty state */
-        <div className="text-center py-16">
-          <Calendar className="h-16 w-16 text-gray-200 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-500">No events yet</h3>
-          <p className="text-sm text-gray-400 mt-2 max-w-md mx-auto">
-            Plan your perfect wedding day by adding events to the timeline. Start with the
-            ceremony time and work backwards and forwards from there.
-          </p>
-          <div className="mt-6 space-y-2 text-xs text-gray-400">
-            <p>💡 Tip: Add events like &quot;Getting Ready,&quot; &quot;First Look,&quot; &quot;Ceremony,&quot;</p>
-            <p>&quot;Cocktail Hour,&quot; &quot;Reception,&quot; &quot;First Dance,&quot; and &quot;Send-Off&quot;</p>
-          </div>
-          <Button onClick={openCreateDialog} className="mt-6 bg-rose-500 hover:bg-rose-600">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Your First Event
-          </Button>
+        <div className="relative">
+          {renderCenterTimeline()}
+          {/* Floating Add button for timeline view */}
+          {sortedEvents.length > 0 && (
+            <div className="flex justify-center mt-8">
+              <Button onClick={openCreateDialog} className="bg-rose-500 hover:bg-rose-600">
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add Event
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -300,6 +814,9 @@ export function TimelineView() {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingEvent ? 'Edit Event' : 'Add Event'}</DialogTitle>
+            <DialogDescription>
+              {editingEvent ? 'Update the details of your timeline event.' : 'Add a new event to your wedding timeline.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
@@ -311,6 +828,7 @@ export function TimelineView() {
                 placeholder="e.g., Wedding Ceremony"
               />
             </div>
+
             <div className="grid gap-2">
               <Label htmlFor="event-desc">Description</Label>
               <Textarea
@@ -318,9 +836,23 @@ export function TimelineView() {
                 value={formData.description}
                 onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))}
                 placeholder="What happens during this event?"
-                rows={3}
+                rows={2}
               />
             </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="event-date">Event Date</Label>
+              <Input
+                id="event-date"
+                type="date"
+                value={formData.eventDate}
+                onChange={(e) => setFormData((f) => ({ ...f, eventDate: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Set a date for planning milestones. Leave blank for wedding-day events (uses time-based positioning).
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="event-start">Start Time</Label>
@@ -341,6 +873,7 @@ export function TimelineView() {
                 />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="event-location">Location</Label>
@@ -370,6 +903,7 @@ export function TimelineView() {
                 </Select>
               </div>
             </div>
+
             <div className="grid gap-2">
               <Label htmlFor="event-notes">Notes</Label>
               <Textarea
@@ -409,6 +943,6 @@ export function TimelineView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </motion.div>
   )
 }

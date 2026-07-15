@@ -81,6 +81,7 @@ export const TimelineEventSchema = z.object({
   description: z.string().max(2000).default(''),
   startTime: z.string().max(10).default(''),
   endTime: z.string().max(10).default(''),
+  eventDate: z.string().max(10).default(''),
   location: z.string().max(500).default(''),
   category: z.string().max(100).default('ceremony'),
   notes: z.string().max(2000).default(''),
@@ -90,11 +91,16 @@ export const TimelineEventSchema = z.object({
 export const MediaItemSchema = z.object({
   title: z.string().max(500).default(''),
   type: z.enum(['image', 'video', 'link']).default('image'),
-  url: z.string().max(2000).default(''),
-  thumbnail: z.string().max(2000).default(''),
+  url: z.string().max(50000).default(''),
+  thumbnail: z.string().max(50000).default(''),
   category: z.string().max(100).default('inspiration'),
   notes: z.string().max(2000).default(''),
   sortOrder: z.number().int().min(0).default(0),
+  source: z.string().max(100).default(''),
+  tags: z.string().max(500).default(''),
+  location: z.string().max(200).default(''),
+  date: z.string().max(20).default(''),
+  color: z.string().max(7).default(''),
 })
 
 export const WebLinkSchema = z.object({

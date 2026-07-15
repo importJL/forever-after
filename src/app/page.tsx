@@ -337,14 +337,14 @@ export default function Home() {
       }
 
       const demoTimeline = [
-        { title: 'Getting Ready', description: 'Bridal party gets ready at the venue', startTime: '10:00', endTime: '12:00', location: 'Bridal Suite', category: 'other', sortOrder: 0 },
-        { title: 'First Look', description: 'Private first look photos', startTime: '12:00', endTime: '12:30', location: 'Garden Gazebo', category: 'photos', sortOrder: 1 },
-        { title: 'Ceremony', description: 'Wedding ceremony in the rose garden', startTime: '14:00', endTime: '15:00', location: 'Rose Garden', category: 'ceremony', sortOrder: 2 },
-        { title: 'Cocktail Hour', description: 'Drinks and hors d\'oeuvres', startTime: '15:00', endTime: '16:00', location: 'Terrace', category: 'cocktail', sortOrder: 3 },
-        { title: 'Dinner', description: 'Sit-down dinner service', startTime: '16:00', endTime: '18:00', location: 'Grand Hall', category: 'dinner', sortOrder: 4 },
-        { title: 'First Dance & Toasts', description: 'First dance, father-daughter dance, toasts', startTime: '18:00', endTime: '18:45', location: 'Grand Hall', category: 'reception', sortOrder: 5 },
-        { title: 'Dancing & Celebration', description: 'Open dance floor', startTime: '18:45', endTime: '22:00', location: 'Grand Hall', category: 'dancing', sortOrder: 6 },
-        { title: 'Sparkler Send-Off', description: 'Grand exit with sparklers', startTime: '22:00', endTime: '22:15', location: 'Front Entrance', category: 'ceremony', sortOrder: 7 },
+        { title: 'Getting Ready', description: 'Bridal party gets ready at the venue', startTime: '10:00', endTime: '12:00', eventDate: '2026-06-15', location: 'Bridal Suite', category: 'other', sortOrder: 0 },
+        { title: 'First Look', description: 'Private first look photos', startTime: '12:00', endTime: '12:30', eventDate: '2026-06-15', location: 'Garden Gazebo', category: 'photos', sortOrder: 1 },
+        { title: 'Ceremony', description: 'Wedding ceremony in the rose garden', startTime: '14:00', endTime: '15:00', eventDate: '2026-06-15', location: 'Rose Garden', category: 'ceremony', sortOrder: 2 },
+        { title: 'Cocktail Hour', description: 'Drinks and hors d\'oeuvres', startTime: '15:00', endTime: '16:00', eventDate: '2026-06-15', location: 'Terrace', category: 'cocktail', sortOrder: 3 },
+        { title: 'Dinner', description: 'Sit-down dinner service', startTime: '16:00', endTime: '18:00', eventDate: '2026-06-15', location: 'Grand Hall', category: 'dinner', sortOrder: 4 },
+        { title: 'First Dance & Toasts', description: 'First dance, father-daughter dance, toasts', startTime: '18:00', endTime: '18:45', eventDate: '2026-06-15', location: 'Grand Hall', category: 'reception', sortOrder: 5 },
+        { title: 'Dancing & Celebration', description: 'Open dance floor', startTime: '18:45', endTime: '22:00', eventDate: '2026-06-15', location: 'Grand Hall', category: 'dancing', sortOrder: 6 },
+        { title: 'Sparkler Send-Off', description: 'Grand exit with sparklers', startTime: '22:00', endTime: '22:15', eventDate: '2026-06-15', location: 'Front Entrance', category: 'ceremony', sortOrder: 7 },
       ]
       for (const t of demoTimeline) {
         await fetch('/api/timeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) })
