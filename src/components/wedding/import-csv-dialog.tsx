@@ -18,7 +18,40 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { client } from '@/lib/amplify-client'
+import * as XLSX from 'xlsx'
 import { Upload, FileUp, CheckCircle, X, Table2 } from 'lucide-react'
+
+const WEDDING_DATE = new Date(2027, 4, 15)
+
+function parseTimelineToDueDate(timeline: string): string {
+  if (!timeline) return ''
+  const match = timeline.match(/(\d+)/)
+  if (!match) return ''
+  const amount = parseInt(match[1], 10)
+  const date = new Date(WEDDING_DATE)
+  if (timeline.includes('day')) {
+    date.setDate(date.getDate() - amount)
+  } else if (timeline.includes('week')) {
+    date.setDate(date.getDate() - amount * 7)
+  } else if (timeline.includes('month')) {
+    date.setMonth(date.getMonth() - amount)
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function parsePrice(value: unknown): number {
+  const str = typeof value === 'string' ? value.trim() : String(value ?? '')
+  if (!str) return 0
+  const match = str.match(/(\d+)/)
+  return match ? parseInt(match[1], 10) : 0
+}
+
+function parseString(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number') return String(value)
+  return ''
+}
 
 interface PreviewData {
   headers: string[]
@@ -60,21 +93,22 @@ export function ImportCsvDialog({ open, onOpenChange, targetModule, onImport, ti
     if (!file) return
     setIsUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('targetModule', targetModule)
+      const arrayBuffer = await file.arrayBuffer()
+      const data = new Uint8Array(arrayBuffer)
+      const workbook = XLSX.read(data, { type: 'array', raw: true })
+      const sheetName = workbook.SheetNames[0]
+      const sheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, unknown>[]
 
-      const res = await fetch('/api/import', { method: 'POST', body: formData })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Failed to parse file' }))
-        throw new Error(err.error || 'Failed to parse file')
+      if (jsonData.length === 0) {
+        toast.error('File is empty')
+        return
       }
 
-      const data = await res.json()
-      if (data.headers && data.rows) {
-        setPreviewData({ headers: data.headers, rows: data.rows })
-        toast.success(`Parsed ${data.rows.length} rows`)
-      }
+      const headers = Object.keys(jsonData[0])
+      const rows = jsonData.map((item) => headers.map((h) => String(item[h] ?? '')))
+      setPreviewData({ headers, rows })
+      toast.success(`Parsed ${rows.length} rows`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to parse file')
     } finally {
@@ -86,23 +120,60 @@ export function ImportCsvDialog({ open, onOpenChange, targetModule, onImport, ti
     if (!file) return
     setIsUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('targetModule', targetModule)
-      formData.append('confirm', 'true')
+      const arrayBuffer = await file.arrayBuffer()
+      const data = new Uint8Array(arrayBuffer)
+      const workbook = XLSX.read(data, { type: 'array', raw: true })
+      const sheetName = workbook.SheetNames[0]
+      const sheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, unknown>[]
 
-      const res = await fetch('/api/import', { method: 'POST', body: formData })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Failed to import' }))
-        throw new Error(err.error || 'Failed to import')
+      let created: unknown[] = []
+
+      if (targetModule === 'vendors') {
+        const vendors = jsonData.map((row) => ({
+          name: parseString(row.Company || row.Name || row.name),
+          category: parseString(row.Categories || row.Category || row.category),
+          contactPerson: '',
+          email: '',
+          phone: '',
+          website: '',
+          address: '',
+          district: '',
+          city: 'Hong Kong',
+          price: parsePrice(row['Reference Rate'] || row.Price || row.price),
+          depositPaid: 0,
+          status: 'considering' as const,
+          rating: 0,
+          notes: [parseString(row.Content || row.Notes || row.notes), parseString(row.Remark || row.Remarks)].filter(Boolean).join(' - '),
+          contractDate: '',
+        }))
+        const results = await Promise.allSettled(
+          vendors.map((v) => client.models.Vendor.create(v))
+        )
+        created = results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<{ data: unknown }>).value.data)
+      } else if (targetModule === 'tasks') {
+        const tasks = jsonData.map((row, i) => ({
+          title: parseString(row.Task || row.Title || row.title),
+          description: '',
+          category: parseString(row.Topic || row.Category || row.category) || 'Other',
+          priority: 'medium' as const,
+          status: 'todo' as const,
+          dueDate: parseTimelineToDueDate(parseString(row.Timeline || row['Due Date'] || row.dueDate)),
+          assignee: '',
+          notes: '',
+          sortOrder: i,
+        }))
+        const results = await Promise.allSettled(
+          tasks.map((t) => client.models.Task.create(t))
+        )
+        created = results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<{ data: unknown }>).value.data)
       }
 
-      const data = await res.json()
-      if (data.data && Array.isArray(data.data)) {
-        onImport(data.data)
+      if (created.length > 0) {
+        onImport(created)
       }
 
-      toast.success(`Successfully imported ${data.count ?? previewData?.rows.length ?? 0} item(s).`)
+      toast.success(`Successfully imported ${created.length} item(s).`)
       onOpenChange(false)
       clearFile()
     } catch (err) {
@@ -123,7 +194,6 @@ export function ImportCsvDialog({ open, onOpenChange, targetModule, onImport, ti
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* File input */}
           <div className="flex items-center gap-3">
             <input
               ref={fileInputRef}
@@ -158,7 +228,6 @@ export function ImportCsvDialog({ open, onOpenChange, targetModule, onImport, ti
             )}
           </div>
 
-          {/* Preview button */}
           {file && !previewData && (
             <Button
               className="bg-rose-600 hover:bg-rose-700 text-white"
@@ -179,7 +248,6 @@ export function ImportCsvDialog({ open, onOpenChange, targetModule, onImport, ti
             </Button>
           )}
 
-          {/* Preview table */}
           {previewData && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">

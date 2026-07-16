@@ -8,9 +8,9 @@ frontend:
     build:
       commands:
         - bun run build
-        - cp -r .next/static .next/standalone/.next/static
+        - cp -r public/* out/
   artifacts:
-    baseDirectory: .next
+    baseDirectory: out
     files:
       - '**/*'
   cache:

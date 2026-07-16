@@ -4,6 +4,9 @@ import { useState, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { useWeddingStore } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
+import * as XLSX from 'xlsx'
+import mammoth from 'mammoth'
 import {
   FileUp,
   Upload,
@@ -38,9 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Separator } from '@/components/ui/separator'
 
-// ── Types ──────────────────────────────────────────────────────────────────
 interface SelectedFile {
   file: File
   name: string
@@ -57,7 +58,6 @@ interface ImportHistoryItem {
   rows?: number
 }
 
-// ── Constants ──────────────────────────────────────────────────────────────
 const TARGET_MODULES = [
   { value: 'guests', label: 'Guests' },
   { value: 'budget', label: 'Budget' },
@@ -68,7 +68,6 @@ const TARGET_MODULES = [
 
 const ACCEPTED_EXTENSIONS = ['.csv', '.xlsx', '.docx', '.pptx']
 
-// ── Animation ──────────────────────────────────────────────────────────────
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -82,7 +81,6 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' as const } },
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -121,11 +119,247 @@ function getFileTypeBadge(fileName: string) {
   }
 }
 
-// ── Component ──────────────────────────────────────────────────────────────
+function parseYesNo(value: unknown): boolean {
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase()
+    return v === 'yes' || v === '1' || v === 'true'
+  }
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'boolean') return value
+  return false
+}
+
+function parseNumber(value: unknown): number {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') {
+    const v = value.trim()
+    if (v === '') return 0
+    const n = parseInt(v, 10)
+    return isNaN(n) ? 0 : n
+  }
+  return 0
+}
+
+function parseString(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number') return String(value)
+  if (value === null || value === undefined) return ''
+  return String(value)
+}
+
+function mapRsvpStatus(status: string): 'pending' | 'accepted' | 'declined' | 'maybe' {
+  const s = status.toLowerCase()
+  if (s === 'accepted') return 'accepted'
+  if (s === 'declined') return 'declined'
+  if (s === 'maybe') return 'maybe'
+  return 'pending'
+}
+
+function mapRelationshipToRole(relationship: string): string {
+  const r = relationship.toLowerCase()
+  if (r.includes('bridesmaid')) return 'bridesmaid'
+  if (r.includes('groomsmen') || r.includes('groomsman')) return 'groomsman'
+  if (r.includes('immediate family')) return 'family'
+  if (r.includes('officiant')) return 'officiant'
+  return 'guest'
+}
+
+const WEDDING_DATE = new Date(2027, 4, 15)
+
+function parseTimelineToDueDate(timeline: string): string {
+  if (!timeline) return ''
+  const match = timeline.match(/(\d+)/)
+  if (!match) return ''
+  const amount = parseInt(match[1], 10)
+  const date = new Date(WEDDING_DATE)
+  if (timeline.includes('day')) {
+    date.setDate(date.getDate() - amount)
+  } else if (timeline.includes('week')) {
+    date.setDate(date.getDate() - amount * 7)
+  } else if (timeline.includes('month')) {
+    date.setMonth(date.getMonth() - amount)
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function parsePrice(value: unknown): number {
+  const str = parseString(value)
+  if (!str) return 0
+  const match = str.match(/(\d+)/)
+  return match ? parseInt(match[1], 10) : 0
+}
+
+interface CsvRow {
+  Priority?: unknown
+  'Guest Name'?: unknown
+  Side?: unknown
+  Category?: unknown
+  'Relationship Group'?: unknown
+  Overseas?: unknown
+  'Verbal Asked'?: unknown
+  'RSVP Status'?: unknown
+  'Plus One?'?: unknown
+  Adults?: unknown
+  Children?: unknown
+  'Total in Party'?: unknown
+  'Dietary Restrictions'?: unknown
+  Address?: unknown
+  Email?: unknown
+  'Gift Received'?: unknown
+  'Thank You Sent?'?: unknown
+  Remarks?: unknown
+}
+
+interface TaskCsvRow {
+  Timeline?: unknown
+  Task?: unknown
+  Topic?: unknown
+}
+
+interface VendorCsvRow {
+  Categories?: unknown
+  Company?: unknown
+  Content?: unknown
+  Remark?: unknown
+  'Reference Rate'?: unknown
+}
+
+interface SetupRow {
+  'RSVP Status'?: string
+  Side?: string
+  Category?: string
+  Relationship?: string
+  Binary?: string
+  Priority?: string
+}
+
+interface ParsedFileData {
+  headers: string[]
+  rows: string[][]
+  rawData: Record<string, unknown>[]
+  setupData?: ReturnType<typeof parseSetupCsv> | null
+}
+
+function mapCsvRowToGuest(row: CsvRow) {
+  return {
+    name: parseString(row['Guest Name']),
+    email: parseString(row['Email']),
+    group: parseString(row['Category']),
+    rsvpStatus: mapRsvpStatus(parseString(row['RSVP Status'])),
+    dietaryNotes: parseString(row['Dietary Restrictions']),
+    plusOne: parseYesNo(row['Plus One?']),
+    notes: parseString(row['Remarks']),
+    priority: parseNumber(row['Priority']),
+    side: parseString(row['Side']),
+    category: parseString(row['Category']),
+    relationshipGroup: parseString(row['Relationship Group']),
+    overseas: parseYesNo(row['Overseas']),
+    verbalAsked: parseYesNo(row['Verbal Asked']),
+    adults: parseNumber(row['Adults']) || 1,
+    children: parseNumber(row['Children']),
+    totalInParty: parseNumber(row['Total in Party']) || 1,
+    address: parseString(row['Address']),
+    giftReceived: parseString(row['Gift Received']),
+    thankYouSent: parseYesNo(row['Thank You Sent?']),
+    role: mapRelationshipToRole(parseString(row['Relationship Group'])),
+    mealPreference: '',
+    plusOneName: '',
+    tableNumber: 0,
+    seatNumber: 0,
+    phone: '',
+  }
+}
+
+function mapCsvRowToTask(row: TaskCsvRow, index: number) {
+  return {
+    title: parseString(row.Task),
+    description: '',
+    category: parseString(row.Topic) || 'Other',
+    priority: 'medium' as const,
+    status: 'todo' as const,
+    dueDate: parseTimelineToDueDate(parseString(row.Timeline)),
+    assignee: '',
+    notes: '',
+    sortOrder: index,
+  }
+}
+
+function mapCsvRowToVendor(row: VendorCsvRow) {
+  const content = parseString(row.Content)
+  const remark = parseString(row.Remark)
+  const notes = [content, remark].filter(Boolean).join(' - ')
+  return {
+    name: parseString(row.Company),
+    category: parseString(row.Categories),
+    contactPerson: '',
+    email: '',
+    phone: '',
+    website: '',
+    address: '',
+    district: '',
+    city: 'Hong Kong',
+    price: parsePrice(row['Reference Rate']),
+    depositPaid: 0,
+    status: 'considering' as const,
+    rating: 0,
+    notes,
+    contractDate: '',
+  }
+}
+
+function parseSetupCsv(rows: SetupRow[]) {
+  const sides = new Set<string>()
+  const categories = new Set<string>()
+  const relationshipGroups = new Set<string>()
+  const rsvpStatuses = new Set<string>()
+  const priorities = new Set<number>()
+  const binaries = new Set<string>()
+
+  for (const row of rows) {
+    if (row.Side) sides.add(row.Side.trim())
+    if (row.Category) categories.add(row.Category.trim())
+    if (row.Relationship) relationshipGroups.add(row.Relationship.trim())
+    if (row['RSVP Status']) rsvpStatuses.add(row['RSVP Status'].trim())
+    if (row.Priority) {
+      const p = parseInt(row.Priority.trim(), 10)
+      if (!isNaN(p)) priorities.add(p)
+    }
+    if (row.Binary) binaries.add(row.Binary.trim())
+  }
+
+  return {
+    sides: Array.from(sides),
+    categories: Array.from(categories),
+    relationshipGroups: Array.from(relationshipGroups),
+    rsvpStatuses: Array.from(rsvpStatuses),
+    priorities: Array.from(priorities).sort(),
+    binaries: Array.from(binaries),
+  }
+}
+
+async function parseFileInBrowser(file: File): Promise<Record<string, unknown>[]> {
+  const ext = file.name.toLowerCase().split('.').pop() ?? ''
+  const arrayBuffer = await file.arrayBuffer()
+
+  if (ext === 'csv' || ext === 'xlsx' || ext === 'xls') {
+    const data = new Uint8Array(arrayBuffer)
+    const workbook = XLSX.read(data, { type: 'array', raw: true })
+    const sheetName = workbook.SheetNames[0]
+    const sheet = workbook.Sheets[sheetName]
+    return XLSX.utils.sheet_to_json(sheet, { defval: '' })
+  }
+
+  if (ext === 'docx') {
+    const result = await mammoth.extractRawText({ arrayBuffer })
+    return [{ text: result.value }]
+  }
+
+  return [{ fileName: file.name, fileType: ext, size: file.size, message: 'Preview not available for this file type' }]
+}
+
 export function FileImport() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // File upload state
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null)
   const [targetModule, setTargetModule] = useState('guests')
   const [isDragging, setIsDragging] = useState(false)
@@ -135,11 +369,10 @@ export function FileImport() {
     rows: string[][]
   } | null>(null)
   const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([])
+  const [parsedFileData, setParsedFileData] = useState<ParsedFileData | null>(null)
 
-  // Setup CSV for Guest imports
   const [setupFile, setSetupFile] = useState<SelectedFile | null>(null)
 
-  // Google import state
   const [googleUrl, setGoogleUrl] = useState('')
   const [isExtracting, setIsExtracting] = useState(false)
   const [googleResult, setGoogleResult] = useState<{
@@ -148,11 +381,10 @@ export function FileImport() {
     error?: string
   } | null>(null)
 
-  // ── File handling ────────────────────────────────────────────────────────
   const validateFile = useCallback((file: File): boolean => {
     const ext = '.' + file.name.split('.').pop()?.toLowerCase()
     if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-      toast.error('Invalid file type. Please upload .xlsx, .docx, or .pptx files.')
+      toast.error('Invalid file type. Please upload .csv, .xlsx, .docx, or .pptx files.')
       return false
     }
     return true
@@ -168,6 +400,7 @@ export function FileImport() {
         type: file.type || 'application/octet-stream',
       })
       setPreviewData(null)
+      setParsedFileData(null)
       setGoogleResult(null)
     },
     [validateFile],
@@ -207,6 +440,7 @@ export function FileImport() {
   const clearFile = useCallback(() => {
     setSelectedFile(null)
     setPreviewData(null)
+    setParsedFileData(null)
     setSetupFile(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [])
@@ -230,83 +464,78 @@ export function FileImport() {
     if (setupFileInputRef.current) setupFileInputRef.current.value = ''
   }, [])
 
-  // ── Upload & Preview ────────────────────────────────────────────────────
   const handlePreview = useCallback(async () => {
     if (!selectedFile) return
     setIsUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', selectedFile.file)
-      formData.append('targetModule', targetModule)
-      if (setupFile) formData.append('setupFile', setupFile.file)
+      const rawData = await parseFileInBrowser(selectedFile.file)
 
-      const res = await fetch('/api/import', {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Upload failed' }))
-        throw new Error(err.error || 'Upload failed')
+      let setupData = null
+      if (setupFile) {
+        const setupRaw = await parseFileInBrowser(setupFile.file)
+        setupData = parseSetupCsv(setupRaw as SetupRow[])
       }
 
-      const data = await res.json()
-      if (data.headers && data.rows) {
-        setPreviewData({ headers: data.headers, rows: data.rows })
-        toast.success('File parsed successfully. Review the preview below.')
-      } else if (data.data) {
-        // Handle non-tabular data
-        const arr = Array.isArray(data.data) ? data.data : [data.data]
-        const headers = Object.keys(arr[0] ?? {})
-        const rows = arr.map((item: Record<string, unknown>) =>
-          headers.map((h) => String(item[h] ?? '')),
-        )
-        setPreviewData({ headers, rows })
-        toast.success('File parsed successfully. Review the preview below.')
+      const headers = rawData.length > 0 ? Object.keys(rawData[0]) : []
+      const rows = rawData.map((item) => headers.map((h) => String(item[h] ?? '')))
+
+      setParsedFileData({ headers, rows, rawData, setupData })
+      setPreviewData({ headers, rows })
+
+      if (setupData) {
+        useWeddingStore.getState().setGuestSetup(setupData)
       }
+
+      toast.success('File parsed successfully. Review the preview below.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to parse file')
     } finally {
       setIsUploading(false)
     }
-  }, [selectedFile, targetModule])
+  }, [selectedFile, targetModule, setupFile])
 
   const handleConfirmImport = useCallback(async () => {
-    if (!selectedFile) return
+    if (!selectedFile || !parsedFileData) return
     setIsUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', selectedFile.file)
-      formData.append('targetModule', targetModule)
-      formData.append('confirm', 'true')
-      if (setupFile) formData.append('setupFile', setupFile.file)
+      const rawData = parsedFileData.rawData
+      let created: unknown[] = []
+      let count = 0
 
-      const res = await fetch('/api/import', {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Import failed' }))
-        throw new Error(err.error || 'Import failed')
-      }
-
-      const data = await res.json()
-      const rowCount = data.count ?? previewData?.rows.length ?? 0
-
-      if (data.data && Array.isArray(data.data)) {
-        if (targetModule === 'tasks') {
-          useWeddingStore.getState().setTasks(data.data)
-        } else if (targetModule === 'vendors') {
-          useWeddingStore.getState().setVendors(data.data)
-        } else {
-          useWeddingStore.getState().setGuests(data.data)
+      if (targetModule === 'tasks') {
+        const tasks = rawData.map((row, i) => mapCsvRowToTask(row as TaskCsvRow, i))
+        const results = await Promise.allSettled(
+          tasks.map((t) => client.models.Task.create(t))
+        )
+        created = results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<{ data: unknown }>).value.data)
+        count = created.length
+        if (created.length > 0) {
+          useWeddingStore.getState().setTasks(created)
+        }
+      } else if (targetModule === 'vendors') {
+        const vendors = rawData.map((row) => mapCsvRowToVendor(row as VendorCsvRow))
+        const results = await Promise.allSettled(
+          vendors.map((v) => client.models.Vendor.create(v))
+        )
+        created = results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<{ data: unknown }>).value.data)
+        count = created.length
+        if (created.length > 0) {
+          useWeddingStore.getState().setVendors(created)
+        }
+      } else {
+        const guests = rawData.map((row) => mapCsvRowToGuest(row as CsvRow))
+        const results = await Promise.allSettled(
+          guests.map((g) => client.models.Guest.create(g))
+        )
+        created = results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<{ data: unknown }>).value.data)
+        count = created.length
+        if (created.length > 0) {
+          useWeddingStore.getState().setGuests(created)
         }
       }
 
-      // Update Zustand store with setup data
-      if (data.setupData) {
-        useWeddingStore.getState().setGuestSetup(data.setupData)
+      if (parsedFileData.setupData) {
+        useWeddingStore.getState().setGuestSetup(parsedFileData.setupData)
       }
 
       setImportHistory((prev) => [
@@ -316,13 +545,13 @@ export function FileImport() {
           targetModule,
           status: 'success',
           timestamp: new Date().toISOString(),
-          rows: rowCount,
+          rows: count,
         },
         ...prev,
       ])
 
       const moduleLabel = targetModule === 'tasks' ? 'task(s)' : targetModule === 'vendors' ? 'vendor(s)' : 'guest(s)'
-      toast.success(`Successfully imported ${rowCount} ${moduleLabel}.`)
+      toast.success(`Successfully imported ${count} ${moduleLabel}.`)
       clearFile()
     } catch (err) {
       setImportHistory((prev) => [
@@ -339,9 +568,8 @@ export function FileImport() {
     } finally {
       setIsUploading(false)
     }
-  }, [selectedFile, targetModule, previewData, clearFile, setupFile])
+  }, [selectedFile, targetModule, previewData, parsedFileData, clearFile, setupFile])
 
-  // ── Google Import ────────────────────────────────────────────────────────
   const handleGoogleExtract = useCallback(async () => {
     if (!googleUrl.trim()) {
       toast.error('Please enter a Google Docs or Sheets URL.')
@@ -350,33 +578,19 @@ export function FileImport() {
     setIsExtracting(true)
     setGoogleResult(null)
     try {
-      const res = await fetch('/api/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: googleUrl.trim(), source: 'google' }),
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Extraction failed' }))
-        throw new Error(err.error || 'Extraction failed')
-      }
-
-      const data = await res.json()
-      setGoogleResult({ success: true, data: data.data ?? data })
-
+      await new Promise(r => setTimeout(r, 500))
+      setGoogleResult({ success: false, error: 'Google integration coming soon' })
       setImportHistory((prev) => [
         {
           id: `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          fileName: new URL(googleUrl).hostname,
+          fileName: googleUrl,
           targetModule: 'Google',
-          status: 'success',
+          status: 'error',
           timestamp: new Date().toISOString(),
-          rows: Array.isArray(data.data) ? data.data.length : 1,
         },
         ...prev,
       ])
-
-      toast.success('Content extracted successfully from Google.')
+      toast.error('Google integration coming soon')
     } catch (err) {
       setGoogleResult({
         success: false,
@@ -388,7 +602,6 @@ export function FileImport() {
     }
   }, [googleUrl])
 
-  // ── Render ──────────────────────────────────────────────────────────────
   return (
     <motion.div
       className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto"
@@ -396,7 +609,6 @@ export function FileImport() {
       initial="hidden"
       animate="visible"
     >
-      {/* Header */}
       <motion.div variants={itemVariants}>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <FileUp className="h-6 w-6 text-rose-500" />
@@ -407,7 +619,6 @@ export function FileImport() {
         </p>
       </motion.div>
 
-      {/* File Upload Zone */}
       <motion.div variants={itemVariants}>
         <Card>
           <CardHeader>
@@ -417,7 +628,6 @@ export function FileImport() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Drop Zone */}
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -451,7 +661,6 @@ export function FileImport() {
               </p>
             </div>
 
-            {/* Selected File Info */}
             {selectedFile && (
               <div className="flex items-center gap-4 p-4 rounded-lg border bg-muted/30">
                 <div className="shrink-0">{getFileTypeIcon(selectedFile.name)}</div>
@@ -473,7 +682,6 @@ export function FileImport() {
               </div>
             )}
 
-            {/* Target Module + Preview Button */}
             {selectedFile && !previewData && (
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
@@ -511,7 +719,6 @@ export function FileImport() {
                   </Button>
                 </div>
 
-                {/* Setup CSV (optional, for Guest imports) */}
                 {targetModule === 'guests' && (
                   <div className="rounded-lg border border-dashed border-muted-foreground/25 p-3">
                     <div className="flex items-center gap-3">
@@ -557,7 +764,6 @@ export function FileImport() {
               </div>
             )}
 
-            {/* Preview Table */}
             {previewData && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -628,7 +834,6 @@ export function FileImport() {
         </Card>
       </motion.div>
 
-      {/* Google Docs/Sheets Import */}
       <motion.div variants={itemVariants}>
         <Card>
           <CardHeader>
@@ -668,7 +873,6 @@ export function FileImport() {
               </Button>
             </div>
 
-            {/* Google Result */}
             {googleResult && (
               <div
                 className={`p-4 rounded-lg border ${
@@ -708,7 +912,6 @@ export function FileImport() {
         </Card>
       </motion.div>
 
-      {/* Import History */}
       {importHistory.length > 0 && (
         <motion.div variants={itemVariants}>
           <Card>
