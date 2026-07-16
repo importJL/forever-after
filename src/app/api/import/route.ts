@@ -5,11 +5,8 @@ import type { Schema } from '@amplify/data/resource'
 import * as XLSX from 'xlsx'
 import mammoth from 'mammoth'
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const outputs = (() => { try { return require('../../../../amplify_outputs.json') } catch { return undefined } })()
-
 const { runWithAmplifyServerContext } = createServerRunner({
-  config: outputs ?? {
+  config: {
     Auth: { Cognito: { userPoolId: process.env.NEXT_PUBLIC_USER_POOL_ID ?? '', userPoolClientId: process.env.NEXT_PUBLIC_USER_POOL_CLIENT_ID ?? '', identityPoolId: process.env.NEXT_PUBLIC_IDENTITY_POOL_ID ?? '' } },
     API: { GraphQL: { endpoint: process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT ?? '', region: process.env.NEXT_PUBLIC_AWS_REGION ?? '', defaultAuthMode: 'userPool' as const } },
   },
