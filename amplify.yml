@@ -8,6 +8,7 @@ frontend:
     build:
       commands:
         - bun run build
+        - cp -r .next/static .next/standalone/.next/static
   artifacts:
     baseDirectory: .next
     files:
