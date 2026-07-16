@@ -33,6 +33,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useWeddingStore, type Vendor } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
 import { ImportCsvDialog } from '@/components/wedding/import-csv-dialog'
 import { LocationLink } from '@/components/map/location-link'
 import {
@@ -218,31 +219,15 @@ export function VendorManager() {
 
     try {
       if (editingVendor) {
-        const res = await fetch(`/api/vendors/${editingVendor.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        })
-        if (res.ok) {
-          const updated = await res.json()
-          updateVendor(updated.id, updated)
-          toast.success('Vendor updated')
-        } else {
-          toast.error('Failed to update vendor')
-        }
+        const { data: updated, errors } = await client.models.Vendor.update({ id: editingVendor.id, ...formData })
+        if (errors) throw new Error(errors[0].message)
+        if (updated) updateVendor(updated.id, updated)
+        toast.success('Vendor updated')
       } else {
-        const res = await fetch('/api/vendors', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        })
-        if (res.ok) {
-          const created = await res.json()
-          addVendor(created)
-          toast.success('Vendor added')
-        } else {
-          toast.error('Failed to add vendor')
-        }
+        const { data: created, errors } = await client.models.Vendor.create(formData)
+        if (errors) throw new Error(errors[0].message)
+        if (created) addVendor(created)
+        toast.success('Vendor added')
       }
       setDialogOpen(false)
     } catch {
@@ -259,13 +244,10 @@ export function VendorManager() {
   const handleDelete = async () => {
     if (!deleteConfirmVendor) return
     try {
-      const res = await fetch(`/api/vendors/${deleteConfirmVendor.id}`, { method: 'DELETE' })
-      if (res.ok) {
-        deleteVendor(deleteConfirmVendor.id)
-        toast.success('Vendor deleted')
-      } else {
-        toast.error('Failed to delete vendor')
-      }
+      const { errors } = await client.models.Vendor.delete({ id: deleteConfirmVendor.id })
+      if (errors) throw new Error(errors[0].message)
+      deleteVendor(deleteConfirmVendor.id)
+      toast.success('Vendor deleted')
     } catch {
       toast.error('Something went wrong')
     } finally {

@@ -17,6 +17,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { useWeddingStore } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -180,14 +181,13 @@ export function SettingsView() {
         notes: formData.notes,
       }
 
-      const res = await fetch('/api/wedding', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!res.ok) {
-        throw new Error('Failed to save wedding details')
+      const { data: existing } = await client.models.Wedding.list()
+      if (existing && existing.length > 0) {
+        const { errors } = await client.models.Wedding.update({ id: existing[0].id, ...payload })
+        if (errors) throw new Error(errors[0].message)
+      } else {
+        const { errors } = await client.models.Wedding.create(payload)
+        if (errors) throw new Error(errors[0].message)
       }
 
       // Update store

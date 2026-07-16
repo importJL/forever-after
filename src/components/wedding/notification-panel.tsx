@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { useWeddingStore, type AppNotification } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -145,11 +146,7 @@ export function NotificationPanel() {
 
       markNotificationRead(id)
       try {
-        await fetch(`/api/notifications/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ read: true }),
-        })
+        await client.models.Notification.update({ id, read: true })
       } catch {
         // Optimistic update already applied
       }
@@ -161,8 +158,8 @@ export function NotificationPanel() {
     async () => {
       if (!deleteConfirmNotifId) return
       try {
-        const res = await fetch(`/api/notifications/${deleteConfirmNotifId}`, { method: 'DELETE' })
-        if (res.ok) {
+        const { errors } = await client.models.Notification.delete({ id: deleteConfirmNotifId })
+        if (!errors) {
           setNotifications(storeNotifications.filter((n) => n.id !== deleteConfirmNotifId))
           toast.success('Notification deleted.')
         }
@@ -185,11 +182,7 @@ export function NotificationPanel() {
     }
     await Promise.all(
       unread.map((notif) =>
-        fetch(`/api/notifications/${notif.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ read: true }),
-        }).catch(() => {})
+        client.models.Notification.update({ id: notif.id, read: true }).catch(() => {})
       )
     )
     setIsMarkingAll(false)
@@ -202,7 +195,7 @@ export function NotificationPanel() {
     setIsClearingAll(true)
     for (const notif of storeNotifications) {
       try {
-        await fetch(`/api/notifications/${notif.id}`, { method: 'DELETE' })
+        await client.models.Notification.delete({ id: notif.id })
       } catch {
         // Continue with others
       }

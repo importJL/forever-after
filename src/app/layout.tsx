@@ -3,7 +3,7 @@ import { Geist, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "next-themes";
-import { AuthSessionProvider } from "@/lib/session-provider";
+import { AmplifySessionProvider } from "@/lib/amplify-session-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,9 +45,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AuthSessionProvider>
+          <AmplifySessionProvider>
             {children}
-          </AuthSessionProvider>
+          </AmplifySessionProvider>
           <Toaster />
         </ThemeProvider>
       </body>

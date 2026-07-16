@@ -66,6 +66,7 @@ import {
   Legend,
 } from 'recharts'
 import { useWeddingStore, type BudgetCategory, type BudgetExpense } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -158,15 +159,11 @@ export function BudgetTracker() {
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
-  const fetchCategories = useCallback(async (signal?: AbortSignal) => {
+  const fetchCategories = useCallback(async () => {
     try {
-      const res = await fetch('/api/budget', { signal })
-      if (res.ok) {
-        const data = await res.json()
-        setBudgetCategories(data)
-      }
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return
+      const { data } = await client.models.BudgetCategory.list()
+      if (data) setBudgetCategories(data)
+    } catch {
       toast.error('Failed to load budget data')
     }
   }, [setBudgetCategories])
@@ -174,17 +171,13 @@ export function BudgetTracker() {
   const seedDefaults = useCallback(async () => {
     try {
       for (const cat of SEED_CATEGORIES) {
-        await fetch('/api/budget', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: cat.name,
-            icon: cat.icon,
-            budgeted: cat.budgeted,
-            spent: 0,
-            color: cat.color,
-            sortOrder: SEED_CATEGORIES.indexOf(cat),
-          }),
+        await client.models.BudgetCategory.create({
+          name: cat.name,
+          icon: cat.icon,
+          budgeted: cat.budgeted,
+          spent: 0,
+          color: cat.color,
+          sortOrder: SEED_CATEGORIES.indexOf(cat),
         })
       }
       await fetchCategories()
@@ -228,43 +221,28 @@ export function BudgetTracker() {
 
     try {
       if (editingCat) {
-        const res = await fetch(`/api/budget/${editingCat.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: catForm.name.trim(),
-            icon: catForm.icon.trim(),
-            budgeted,
-            color: catForm.color,
-          }),
+        const { data: updated, errors } = await client.models.BudgetCategory.update({
+          id: editingCat.id,
+          name: catForm.name.trim(),
+          icon: catForm.icon.trim(),
+          budgeted,
+          color: catForm.color,
         })
-        if (res.ok) {
-          const updated = await res.json()
-          updateBudgetCategory(editingCat.id, updated)
-          toast.success('Category updated')
-        } else {
-          toast.error('Failed to update category')
-        }
+        if (errors) throw new Error(errors[0].message)
+        if (updated) updateBudgetCategory(editingCat.id, updated)
+        toast.success('Category updated')
       } else {
-        const res = await fetch('/api/budget', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: catForm.name.trim(),
-            icon: catForm.icon.trim(),
-            budgeted,
-            spent: 0,
-            color: catForm.color,
-            sortOrder: budgetCategories.length,
-          }),
+        const { data: created, errors } = await client.models.BudgetCategory.create({
+          name: catForm.name.trim(),
+          icon: catForm.icon.trim(),
+          budgeted,
+          spent: 0,
+          color: catForm.color,
+          sortOrder: budgetCategories.length,
         })
-        if (res.ok) {
-          const created = await res.json()
-          addBudgetCategory(created)
-          toast.success('Category added')
-        } else {
-          toast.error('Failed to add category')
-        }
+        if (errors) throw new Error(errors[0].message)
+        if (created) addBudgetCategory(created)
+        toast.success('Category added')
       }
       setCatDialogOpen(false)
     } catch {
@@ -275,18 +253,15 @@ export function BudgetTracker() {
   async function handleDeleteCategory() {
     if (!deleteConfirmCatId) return
     try {
-      const res = await fetch(`/api/budget/${deleteConfirmCatId}`, { method: 'DELETE' })
-      if (res.ok) {
-        deleteBudgetCategory(deleteConfirmCatId)
-        setExpandedIds((prev) => {
-          const next = new Set(prev)
-          next.delete(deleteConfirmCatId)
-          return next
-        })
-        toast.success('Category deleted')
-      } else {
-        toast.error('Failed to delete category')
-      }
+      const { errors } = await client.models.BudgetCategory.delete({ id: deleteConfirmCatId })
+      if (errors) throw new Error(errors[0].message)
+      deleteBudgetCategory(deleteConfirmCatId)
+      setExpandedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(deleteConfirmCatId)
+        return next
+      })
+      toast.success('Category deleted')
     } catch {
       toast.error('An error occurred deleting the category')
     } finally {
@@ -337,46 +312,31 @@ export function BudgetTracker() {
 
     try {
       if (editingExp) {
-        const res = await fetch(
-          `/api/budget/${expCatId}/expenses/${editingExp.id}`,
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              description: expForm.description.trim(),
-              amount,
-              date: expForm.date,
-              vendor: expForm.vendor.trim(),
-              paid: expForm.paid,
-              notes: expForm.notes.trim(),
-            }),
-          }
-        )
-        if (res.ok) {
-          toast.success('Expense updated')
-          await fetchCategories()
-        } else {
-          toast.error('Failed to update expense')
-        }
-      } else {
-        const res = await fetch(`/api/budget/${expCatId}/expenses`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            description: expForm.description.trim(),
-            amount,
-            date: expForm.date,
-            vendor: expForm.vendor.trim(),
-            paid: expForm.paid,
-            notes: expForm.notes.trim(),
-          }),
+        const { errors } = await client.models.BudgetExpense.update({
+          id: editingExp.id,
+          description: expForm.description.trim(),
+          amount,
+          date: expForm.date,
+          vendor: expForm.vendor.trim(),
+          paid: expForm.paid,
+          notes: expForm.notes.trim(),
         })
-        if (res.ok) {
-          toast.success('Expense added')
-          await fetchCategories()
-        } else {
-          toast.error('Failed to add expense')
-        }
+        if (errors) throw new Error(errors[0].message)
+        toast.success('Expense updated')
+        await fetchCategories()
+      } else {
+        const { errors } = await client.models.BudgetExpense.create({
+          categoryId: expCatId,
+          description: expForm.description.trim(),
+          amount,
+          date: expForm.date,
+          vendor: expForm.vendor.trim(),
+          paid: expForm.paid,
+          notes: expForm.notes.trim(),
+        })
+        if (errors) throw new Error(errors[0].message)
+        toast.success('Expense added')
+        await fetchCategories()
       }
       setExpDialogOpen(false)
     } catch {
@@ -387,16 +347,10 @@ export function BudgetTracker() {
   async function handleDeleteExpense() {
     if (!deleteConfirmExp) return
     try {
-      const res = await fetch(
-        `/api/budget/${deleteConfirmExp.catId}/expenses/${deleteConfirmExp.expId}`,
-        { method: 'DELETE' }
-      )
-      if (res.ok) {
-        toast.success('Expense deleted')
-        await fetchCategories()
-      } else {
-        toast.error('Failed to delete expense')
-      }
+      const { errors } = await client.models.BudgetExpense.delete({ id: deleteConfirmExp.expId })
+      if (errors) throw new Error(errors[0].message)
+      toast.success('Expense deleted')
+      await fetchCategories()
     } catch {
       toast.error('An error occurred deleting the expense')
     } finally {

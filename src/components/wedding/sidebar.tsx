@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import { LocationLink } from '@/components/map/location-link'
-import { signOut } from 'next-auth/react'
+import { signOut } from 'aws-amplify/auth'
 import {
   LayoutDashboard,
   Users,
@@ -255,7 +255,7 @@ export function WeddingSidebar() {
                 'w-full h-9 text-muted-foreground hover:text-destructive gap-2',
                 !sidebarOpen && 'justify-center px-0'
               )}
-              onClick={() => signOut({ callbackUrl: window.location.origin })}
+              onClick={async () => { await signOut(); window.location.href = '/' }}
             >
               <LogOut className="w-4 h-4" />
               {sidebarOpen && <span className="text-xs">Sign Out</span>}

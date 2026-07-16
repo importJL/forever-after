@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
+import { useAmplifySession } from '@/lib/amplify-session-provider'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useTheme } from 'next-themes'
@@ -19,19 +19,19 @@ const features = [
 
 export default function LandingPage() {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { user, loading } = useAmplifySession()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (!loading && user) {
       router.push('/app')
     }
-  }, [status, router])
+  }, [user, loading, router])
 
-  if (status === 'loading' || status === 'authenticated') {
+  if (loading || user) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3">

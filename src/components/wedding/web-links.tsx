@@ -19,6 +19,7 @@ import {
   MoreHorizontal,
 } from 'lucide-react'
 import { useWeddingStore, type WebLink } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -204,37 +205,16 @@ export function WebLinks() {
 
     setIsSubmitting(true)
     try {
+      const linkData = { title: form.title.trim(), url, description: form.description.trim(), category: form.category }
       if (editingId) {
-        // Update
-        const res = await fetch(`/api/links/${editingId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: form.title.trim(),
-            url,
-            description: form.description.trim(),
-            category: form.category,
-          }),
-        })
-        if (!res.ok) throw new Error('Failed to update link')
-        const updated = await res.json()
-        updateWebLink(editingId, updated)
+        const { data: updated, errors } = await client.models.WebLink.update({ id: editingId, ...linkData })
+        if (errors) throw new Error(errors[0].message)
+        if (updated) updateWebLink(editingId, updated)
         toast.success('Link updated.')
       } else {
-        // Create
-        const res = await fetch('/api/links', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: form.title.trim(),
-            url,
-            description: form.description.trim(),
-            category: form.category,
-          }),
-        })
-        if (!res.ok) throw new Error('Failed to add link')
-        const created = await res.json()
-        addWebLink(created)
+        const { data: created, errors } = await client.models.WebLink.create(linkData)
+        if (errors) throw new Error(errors[0].message)
+        if (created) addWebLink(created)
         toast.success('Link added.')
       }
       setDialogOpen(false)
@@ -249,8 +229,8 @@ export function WebLinks() {
     async () => {
       if (!deleteConfirmLinkId) return
       try {
-        const res = await fetch(`/api/links/${deleteConfirmLinkId}`, { method: 'DELETE' })
-        if (!res.ok) throw new Error('Failed to delete link')
+        const { errors } = await client.models.WebLink.delete({ id: deleteConfirmLinkId })
+        if (errors) throw new Error(errors[0].message)
         deleteWebLink(deleteConfirmLinkId)
         toast.success('Link deleted.')
       } catch (err) {

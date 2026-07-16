@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { AlertTriangle, RefreshCw, Sun, Moon, Search, Sparkles, LogOut } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { signOut } from 'next-auth/react'
+import { signOut } from 'aws-amplify/auth'
+import { client } from '@/lib/amplify-client'
 import dynamic from 'next/dynamic'
 
 interface ErrorBoundaryProps {
@@ -227,139 +228,131 @@ export default function AppPage() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
-  const fetchAllData = useCallback(async (signal?: AbortSignal) => {
-    const endpoints = [
-      '/api/wedding', '/api/guests', '/api/budget', '/api/tasks',
-      '/api/vendors', '/api/timeline', '/api/media', '/api/links', '/api/notifications',
-    ]
-    const results = await Promise.allSettled(
-      endpoints.map((url) => fetch(url, { signal }).then((r) => r.json()))
-    )
+  const fetchAllData = useCallback(async () => {
+    const results = await Promise.allSettled([
+      client.models.Wedding.list(),
+      client.models.Guest.list(),
+      client.models.BudgetCategory.list(),
+      client.models.Task.list(),
+      client.models.Vendor.list(),
+      client.models.TimelineEvent.list(),
+      client.models.MediaItem.list(),
+      client.models.WebLink.list(),
+      client.models.Notification.list(),
+    ])
     const store = useWeddingStore.getState()
-    const setters: Array<(data: unknown) => void> = [
-      (d: unknown) => d && store.setWedding(d as Parameters<typeof store.setWedding>[0]),
-      ...Array(8).fill(null).map((_, i) => {
-        const fns = [store.setGuests, store.setBudgetCategories, store.setTasks, store.setVendors, store.setTimelineEvents, store.setMediaItems, store.setWebLinks, store.setNotifications]
-        return (d: unknown) => Array.isArray(d) && fns[i](d)
-      }),
+    const handlers = [
+      (r: { data: unknown[] }) => { if (r.data[0]) store.setWedding(r.data[0] as Parameters<typeof store.setWedding>[0]) },
+      (r: { data: unknown[] }) => store.setGuests(r.data),
+      (r: { data: unknown[] }) => store.setBudgetCategories(r.data),
+      (r: { data: unknown[] }) => store.setTasks(r.data),
+      (r: { data: unknown[] }) => store.setVendors(r.data),
+      (r: { data: unknown[] }) => store.setTimelineEvents(r.data),
+      (r: { data: unknown[] }) => store.setMediaItems(r.data),
+      (r: { data: unknown[] }) => store.setWebLinks(r.data),
+      (r: { data: unknown[] }) => store.setNotifications(r.data),
     ]
     results.forEach((r, i) => {
-      if (r.status === 'fulfilled') setters[i](r.value)
+      if (r.status === 'fulfilled') handlers[i](r.value)
     })
   }, [])
 
   useEffect(() => {
-    const controller = new AbortController()
-    async function loadData() {
-      try {
-        await fetchAllData(controller.signal)
-      } catch (e) {
-        if (e instanceof DOMException && e.name === 'AbortError') return
-        console.error('Failed to load data:', e)
-      } finally {
-        if (!controller.signal.aborted) setIsLoaded(true)
-      }
-    }
-    loadData()
-    return () => controller.abort()
+    fetchAllData().catch(console.error).finally(() => setIsLoaded(true))
   }, [setIsLoaded, fetchAllData])
 
   const loadDemoData = useCallback(async () => {
     try {
       toast.loading('Loading demo data...', { id: 'demo' })
 
-      await fetch('/api/wedding', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          coupleName: 'Emma & James', partner1: 'Emma', partner2: 'James',
-          date: '2026-06-15', venue: 'Rosewood Estate',
-          venueAddress: '123 Garden Lane, Napa Valley, CA',
-          theme: 'Garden Party', guestCount: 120, budgetTotal: 35000,
-          notes: 'Our dream outdoor wedding in Napa Valley!',
-        }),
+      await client.models.Wedding.create({
+        coupleName: 'Emma & James', partner1: 'Emma', partner2: 'James',
+        date: '2026-06-15', venue: 'Rosewood Estate',
+        venueAddress: '123 Garden Lane, Napa Valley, CA',
+        theme: 'Garden Party', guestCount: 120, budgetTotal: 35000,
+        notes: 'Our dream outdoor wedding in Napa Valley!',
       })
 
       const demoGuests = [
-        { name: 'Sarah Johnson', email: 'sarah@email.com', phone: '555-0101', group: 'Family', rsvpStatus: 'accepted', mealPreference: 'Chicken', role: 'bridesmaid', plusOne: true, plusOneName: 'Mike Chen' },
-        { name: 'David Wilson', email: 'david@email.com', phone: '555-0102', group: 'Family', rsvpStatus: 'accepted', mealPreference: 'Beef', role: 'groomsman' },
-        { name: 'Lisa Park', email: 'lisa@email.com', phone: '555-0103', group: 'Friends', rsvpStatus: 'accepted', mealPreference: 'Fish', role: 'guest', plusOne: true, plusOneName: 'Tom Park' },
-        { name: 'Robert Chen', email: 'robert@email.com', phone: '555-0104', group: 'Family', rsvpStatus: 'pending', mealPreference: 'Vegetarian', role: 'family' },
-        { name: 'Maria Garcia', email: 'maria@email.com', phone: '555-0105', group: 'Friends', rsvpStatus: 'accepted', mealPreference: 'Chicken', role: 'bridesmaid' },
-        { name: 'James Thompson', email: 'james.t@email.com', phone: '555-0106', group: 'Work', rsvpStatus: 'declined', mealPreference: '', role: 'guest' },
-        { name: 'Emily Davis', email: 'emily@email.com', phone: '555-0107', group: 'Friends', rsvpStatus: 'maybe', mealPreference: 'Vegan', role: 'guest', plusOne: true, plusOneName: 'Chris Lee' },
-        { name: 'Michael Brown', email: 'michael@email.com', phone: '555-0108', group: 'Family', rsvpStatus: 'accepted', mealPreference: 'Beef', role: 'groomsman' },
-        { name: 'Jennifer White', email: 'jen@email.com', phone: '555-0109', group: 'Friends', rsvpStatus: 'accepted', mealPreference: 'Fish', role: 'guest' },
-        { name: 'Alex Kim', email: 'alex@email.com', phone: '555-0110', group: 'Work', rsvpStatus: 'pending', mealPreference: 'Chicken', role: 'guest' },
-        { name: 'Rachel Green', email: 'rachel@email.com', phone: '555-0111', group: 'Friends', rsvpStatus: 'accepted', mealPreference: 'Vegetarian', role: 'bridesmaid', plusOne: true, plusOneName: 'Dan Smith' },
-        { name: 'Rev. Patricia Moore', email: 'patricia@email.com', phone: '555-0112', group: 'Family', rsvpStatus: 'accepted', mealPreference: 'Chicken', role: 'officiant' },
+        { name: 'Sarah Johnson', email: 'sarah@email.com', phone: '555-0101', group: 'Family', rsvpStatus: 'accepted' as const, mealPreference: 'Chicken', role: 'bridesmaid' as const, plusOne: true, plusOneName: 'Mike Chen' },
+        { name: 'David Wilson', email: 'david@email.com', phone: '555-0102', group: 'Family', rsvpStatus: 'accepted' as const, mealPreference: 'Beef', role: 'groomsman' as const },
+        { name: 'Lisa Park', email: 'lisa@email.com', phone: '555-0103', group: 'Friends', rsvpStatus: 'accepted' as const, mealPreference: 'Fish', role: 'guest' as const, plusOne: true, plusOneName: 'Tom Park' },
+        { name: 'Robert Chen', email: 'robert@email.com', phone: '555-0104', group: 'Family', rsvpStatus: 'pending' as const, mealPreference: 'Vegetarian', role: 'family' as const },
+        { name: 'Maria Garcia', email: 'maria@email.com', phone: '555-0105', group: 'Friends', rsvpStatus: 'accepted' as const, mealPreference: 'Chicken', role: 'bridesmaid' as const },
+        { name: 'James Thompson', email: 'james.t@email.com', phone: '555-0106', group: 'Work', rsvpStatus: 'declined' as const, mealPreference: '', role: 'guest' as const },
+        { name: 'Emily Davis', email: 'emily@email.com', phone: '555-0107', group: 'Friends', rsvpStatus: 'maybe' as const, mealPreference: 'Vegan', role: 'guest' as const, plusOne: true, plusOneName: 'Chris Lee' },
+        { name: 'Michael Brown', email: 'michael@email.com', phone: '555-0108', group: 'Family', rsvpStatus: 'accepted' as const, mealPreference: 'Beef', role: 'groomsman' as const },
+        { name: 'Jennifer White', email: 'jen@email.com', phone: '555-0109', group: 'Friends', rsvpStatus: 'accepted' as const, mealPreference: 'Fish', role: 'guest' as const },
+        { name: 'Alex Kim', email: 'alex@email.com', phone: '555-0110', group: 'Work', rsvpStatus: 'pending' as const, mealPreference: 'Chicken', role: 'guest' as const },
+        { name: 'Rachel Green', email: 'rachel@email.com', phone: '555-0111', group: 'Friends', rsvpStatus: 'accepted' as const, mealPreference: 'Vegetarian', role: 'bridesmaid' as const, plusOne: true, plusOneName: 'Dan Smith' },
+        { name: 'Rev. Patricia Moore', email: 'patricia@email.com', phone: '555-0112', group: 'Family', rsvpStatus: 'accepted' as const, mealPreference: 'Chicken', role: 'officiant' as const },
       ]
       for (const g of demoGuests) {
-        await fetch('/api/guests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(g) })
+        await client.models.Guest.create(g)
       }
 
       const demoTasks = [
-        { title: 'Book wedding venue', description: 'Confirm Rosewood Estate booking and pay deposit', category: 'Venue', priority: 'high', status: 'done', dueDate: '2025-09-01', assignee: 'Emma' },
-        { title: 'Choose wedding photographer', description: 'Interview 3 photographers and select one', category: 'Photography', priority: 'high', status: 'done', dueDate: '2025-10-01', assignee: 'Emma' },
-        { title: 'Send save-the-dates', description: 'Design and mail save-the-date cards', category: 'Stationery', priority: 'medium', status: 'done', dueDate: '2025-11-01', assignee: 'Emma' },
-        { title: 'Book caterer', description: 'Taste test and book catering service', category: 'Catering', priority: 'high', status: 'in_progress', dueDate: '2026-01-15', assignee: 'James' },
-        { title: 'Order wedding cake', description: 'Schedule cake tasting and place order', category: 'Catering', priority: 'medium', status: 'in_progress', dueDate: '2026-03-01', assignee: 'Emma' },
-        { title: 'Choose bridesmaid dresses', description: 'Select color palette and dress style', category: 'Attire', priority: 'medium', status: 'todo', dueDate: '2026-02-15', assignee: 'Emma' },
-        { title: 'Book DJ / Band', description: 'Research and book entertainment', category: 'Music', priority: 'high', status: 'todo', dueDate: '2026-02-01', assignee: 'James' },
-        { title: 'Order wedding invitations', description: 'Design and print formal invitations', category: 'Stationery', priority: 'medium', status: 'todo', dueDate: '2026-03-15', assignee: 'Emma' },
-        { title: 'Plan honeymoon', description: 'Book flights and resort', category: 'Honeymoon', priority: 'low', status: 'todo', dueDate: '2026-04-01', assignee: 'James' },
-        { title: 'Final dress fitting', description: 'Last fitting for wedding dress', category: 'Attire', priority: 'high', status: 'todo', dueDate: '2026-05-15', assignee: 'Emma' },
-        { title: 'Arrange transportation', description: 'Book limo/transport for wedding party', category: 'Transportation', priority: 'medium', status: 'todo', dueDate: '2026-05-01', assignee: 'James' },
-        { title: 'Obtain marriage license', description: 'Visit county clerk office', category: 'Legal', priority: 'high', status: 'todo', dueDate: '2026-06-01', assignee: 'Emma & James' },
+        { title: 'Book wedding venue', description: 'Confirm Rosewood Estate booking and pay deposit', category: 'Venue', priority: 'high' as const, status: 'done' as const, dueDate: '2025-09-01', assignee: 'Emma' },
+        { title: 'Choose wedding photographer', description: 'Interview 3 photographers and select one', category: 'Photography', priority: 'high' as const, status: 'done' as const, dueDate: '2025-10-01', assignee: 'Emma' },
+        { title: 'Send save-the-dates', description: 'Design and mail save-the-date cards', category: 'Stationery', priority: 'medium' as const, status: 'done' as const, dueDate: '2025-11-01', assignee: 'Emma' },
+        { title: 'Book caterer', description: 'Taste test and book catering service', category: 'Catering', priority: 'high' as const, status: 'in_progress' as const, dueDate: '2026-01-15', assignee: 'James' },
+        { title: 'Order wedding cake', description: 'Schedule cake tasting and place order', category: 'Catering', priority: 'medium' as const, status: 'in_progress' as const, dueDate: '2026-03-01', assignee: 'Emma' },
+        { title: 'Choose bridesmaid dresses', description: 'Select color palette and dress style', category: 'Attire', priority: 'medium' as const, status: 'todo' as const, dueDate: '2026-02-15', assignee: 'Emma' },
+        { title: 'Book DJ / Band', description: 'Research and book entertainment', category: 'Music', priority: 'high' as const, status: 'todo' as const, dueDate: '2026-02-01', assignee: 'James' },
+        { title: 'Order wedding invitations', description: 'Design and print formal invitations', category: 'Stationery', priority: 'medium' as const, status: 'todo' as const, dueDate: '2026-03-15', assignee: 'Emma' },
+        { title: 'Plan honeymoon', description: 'Book flights and resort', category: 'Honeymoon', priority: 'low' as const, status: 'todo' as const, dueDate: '2026-04-01', assignee: 'James' },
+        { title: 'Final dress fitting', description: 'Last fitting for wedding dress', category: 'Attire', priority: 'high' as const, status: 'todo' as const, dueDate: '2026-05-15', assignee: 'Emma' },
+        { title: 'Arrange transportation', description: 'Book limo/transport for wedding party', category: 'Transportation', priority: 'medium' as const, status: 'todo' as const, dueDate: '2026-05-01', assignee: 'James' },
+        { title: 'Obtain marriage license', description: 'Visit county clerk office', category: 'Legal', priority: 'high' as const, status: 'todo' as const, dueDate: '2026-06-01', assignee: 'Emma & James' },
       ]
       for (const t of demoTasks) {
-        await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) })
+        await client.models.Task.create(t)
       }
 
       const demoVendors = [
-        { name: 'Rosewood Estate', category: 'Venue', contactPerson: 'Victoria Hart', email: 'info@rosewood.com', phone: '555-1001', website: 'https://rosewood.com', price: 8000, depositPaid: 4000, status: 'confirmed', rating: 5, notes: 'Beautiful garden venue' },
-        { name: 'Sweet Moments Bakery', category: 'Cake', contactPerson: 'Anna Lee', email: 'anna@sweetmoments.com', phone: '555-1002', website: '', price: 1200, depositPaid: 600, status: 'booked', rating: 4, notes: '3-tier floral cake' },
-        { name: 'Lens & Light Studio', category: 'Photography', contactPerson: 'Marcus Wei', email: 'marcus@lenslight.com', phone: '555-1003', website: 'https://lenslight.com', price: 3500, depositPaid: 1750, status: 'confirmed', rating: 5, notes: 'Includes engagement + wedding day' },
-        { name: 'Petal & Bloom', category: 'Florist', contactPerson: 'Sophie Chen', email: 'sophie@petalbloom.com', phone: '555-1004', website: '', price: 2500, depositPaid: 0, status: 'booked', rating: 4, notes: 'Garden roses and peonies' },
-        { name: 'DJ Rhythm', category: 'Entertainment', contactPerson: 'Tony Rivera', email: 'tony@dj rhythm.com', phone: '555-1005', website: '', price: 1500, depositPaid: 0, status: 'considering', rating: 3, notes: 'Needs to confirm availability' },
-        { name: 'Garden Catering Co.', category: 'Catering', contactPerson: 'Chef Maria', email: 'maria@gardencatering.com', phone: '555-1006', website: 'https://gardencatering.com', price: 8000, depositPaid: 2000, status: 'booked', rating: 4, notes: 'Farm-to-table menu' },
+        { name: 'Rosewood Estate', category: 'Venue', contactPerson: 'Victoria Hart', email: 'info@rosewood.com', phone: '555-1001', website: 'https://rosewood.com', price: 8000, depositPaid: 4000, status: 'confirmed' as const, rating: 5, notes: 'Beautiful garden venue' },
+        { name: 'Sweet Moments Bakery', category: 'Cake', contactPerson: 'Anna Lee', email: 'anna@sweetmoments.com', phone: '555-1002', website: '', price: 1200, depositPaid: 600, status: 'booked' as const, rating: 4, notes: '3-tier floral cake' },
+        { name: 'Lens & Light Studio', category: 'Photography', contactPerson: 'Marcus Wei', email: 'marcus@lenslight.com', phone: '555-1003', website: 'https://lenslight.com', price: 3500, depositPaid: 1750, status: 'confirmed' as const, rating: 5, notes: 'Includes engagement + wedding day' },
+        { name: 'Petal & Bloom', category: 'Florist', contactPerson: 'Sophie Chen', email: 'sophie@petalbloom.com', phone: '555-1004', website: '', price: 2500, depositPaid: 0, status: 'booked' as const, rating: 4, notes: 'Garden roses and peonies' },
+        { name: 'DJ Rhythm', category: 'Entertainment', contactPerson: 'Tony Rivera', email: 'tony@dj rhythm.com', phone: '555-1005', website: '', price: 1500, depositPaid: 0, status: 'considering' as const, rating: 3, notes: 'Needs to confirm availability' },
+        { name: 'Garden Catering Co.', category: 'Catering', contactPerson: 'Chef Maria', email: 'maria@gardencatering.com', phone: '555-1006', website: 'https://gardencatering.com', price: 8000, depositPaid: 2000, status: 'booked' as const, rating: 4, notes: 'Farm-to-table menu' },
       ]
       for (const v of demoVendors) {
-        await fetch('/api/vendors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) })
+        await client.models.Vendor.create(v)
       }
 
       const demoTimeline = [
-        { title: 'Getting Ready', description: 'Bridal party gets ready at the venue', startTime: '10:00', endTime: '12:00', eventDate: '2026-06-15', location: 'Bridal Suite', category: 'other', sortOrder: 0 },
-        { title: 'First Look', description: 'Private first look photos', startTime: '12:00', endTime: '12:30', eventDate: '2026-06-15', location: 'Garden Gazebo', category: 'photos', sortOrder: 1 },
-        { title: 'Ceremony', description: 'Wedding ceremony in the rose garden', startTime: '14:00', endTime: '15:00', eventDate: '2026-06-15', location: 'Rose Garden', category: 'ceremony', sortOrder: 2 },
-        { title: 'Cocktail Hour', description: 'Drinks and hors d\'oeuvres', startTime: '15:00', endTime: '16:00', eventDate: '2026-06-15', location: 'Terrace', category: 'cocktail', sortOrder: 3 },
-        { title: 'Dinner', description: 'Sit-down dinner service', startTime: '16:00', endTime: '18:00', eventDate: '2026-06-15', location: 'Grand Hall', category: 'dinner', sortOrder: 4 },
-        { title: 'First Dance & Toasts', description: 'First dance, father-daughter dance, toasts', startTime: '18:00', endTime: '18:45', eventDate: '2026-06-15', location: 'Grand Hall', category: 'reception', sortOrder: 5 },
-        { title: 'Dancing & Celebration', description: 'Open dance floor', startTime: '18:45', endTime: '22:00', eventDate: '2026-06-15', location: 'Grand Hall', category: 'dancing', sortOrder: 6 },
-        { title: 'Sparkler Send-Off', description: 'Grand exit with sparklers', startTime: '22:00', endTime: '22:15', eventDate: '2026-06-15', location: 'Front Entrance', category: 'ceremony', sortOrder: 7 },
+        { title: 'Getting Ready', description: 'Bridal party gets ready at the venue', startTime: '10:00', endTime: '12:00', location: 'Bridal Suite', category: 'other' as const, sortOrder: 0 },
+        { title: 'First Look', description: 'Private first look photos', startTime: '12:00', endTime: '12:30', location: 'Garden Gazebo', category: 'photos' as const, sortOrder: 1 },
+        { title: 'Ceremony', description: 'Wedding ceremony in the rose garden', startTime: '14:00', endTime: '15:00', location: 'Rose Garden', category: 'ceremony' as const, sortOrder: 2 },
+        { title: 'Cocktail Hour', description: 'Drinks and hors d\'oeuvres', startTime: '15:00', endTime: '16:00', location: 'Terrace', category: 'photos' as const, sortOrder: 3 },
+        { title: 'Dinner', description: 'Sit-down dinner service', startTime: '16:00', endTime: '18:00', location: 'Grand Hall', category: 'reception' as const, sortOrder: 4 },
+        { title: 'First Dance & Toasts', description: 'First dance, father-daughter dance, toasts', startTime: '18:00', endTime: '18:45', location: 'Grand Hall', category: 'reception' as const, sortOrder: 5 },
+        { title: 'Dancing & Celebration', description: 'Open dance floor', startTime: '18:45', endTime: '22:00', location: 'Grand Hall', category: 'reception' as const, sortOrder: 6 },
+        { title: 'Sparkler Send-Off', description: 'Grand exit with sparklers', startTime: '22:00', endTime: '22:15', location: 'Front Entrance', category: 'ceremony' as const, sortOrder: 7 },
       ]
       for (const t of demoTimeline) {
-        await fetch('/api/timeline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) })
+        await client.models.TimelineEvent.create(t)
       }
 
       const demoLinks = [
-        { title: 'The Knot', url: 'https://www.theknot.com', description: 'Wedding planning resources', category: 'inspiration', icon: 'Heart' },
-        { title: 'Amazon Registry', url: 'https://www.amazon.com/wedding', description: 'Our gift registry', category: 'registry', icon: 'Gift' },
-        { title: 'Pinterest Inspiration', url: 'https://www.pinterest.com', description: 'Wedding mood board ideas', category: 'inspiration', icon: 'Lightbulb' },
-        { title: 'Rosewood Estate', url: 'https://rosewood.com', description: 'Wedding venue website', category: 'venue', icon: 'MapPin' },
+        { title: 'The Knot', url: 'https://www.theknot.com', description: 'Wedding planning resources', category: 'inspiration' as const, icon: 'Heart' },
+        { title: 'Amazon Registry', url: 'https://www.amazon.com/wedding', description: 'Our gift registry', category: 'registry' as const, icon: 'Gift' },
+        { title: 'Pinterest Inspiration', url: 'https://www.pinterest.com', description: 'Wedding mood board ideas', category: 'inspiration' as const, icon: 'Lightbulb' },
+        { title: 'Rosewood Estate', url: 'https://rosewood.com', description: 'Wedding venue website', category: 'venue' as const, icon: 'MapPin' },
       ]
       for (const l of demoLinks) {
-        await fetch('/api/links', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(l) })
+        await client.models.WebLink.create(l)
       }
 
       const demoNotifs = [
-        { title: 'Welcome to ForeverAfter!', message: 'Start by setting up your wedding details in Settings.', type: 'info', relatedTo: 'dashboard' },
-        { title: 'RSVP Reminder', message: '3 guests haven\'t responded yet. Consider sending a follow-up.', type: 'reminder', relatedTo: 'guests' },
-        { title: 'Budget Alert', message: 'You\'ve used 72% of your total budget. Review your expenses.', type: 'warning', relatedTo: 'budget' },
-        { title: 'Task Completed', message: 'Wedding venue has been booked successfully!', type: 'success', relatedTo: 'tasks' },
+        { title: 'Welcome to ForeverAfter!', message: 'Start by setting up your wedding details in Settings.', type: 'info' as const, relatedTo: 'dashboard' },
+        { title: 'RSVP Reminder', message: '3 guests haven\'t responded yet. Consider sending a follow-up.', type: 'reminder' as const, relatedTo: 'guests' },
+        { title: 'Budget Alert', message: 'You\'ve used 72% of your total budget. Review your expenses.', type: 'warning' as const, relatedTo: 'budget' },
+        { title: 'Task Completed', message: 'Wedding venue has been booked successfully!', type: 'success' as const, relatedTo: 'tasks' },
       ]
       for (const n of demoNotifs) {
-        await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(n) })
+        await client.models.Notification.create(n)
       }
 
       await fetchAllData()
@@ -443,7 +436,7 @@ export default function AppPage() {
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
           <button
-            onClick={() => signOut({ callbackUrl: window.location.origin })}
+            onClick={async () => { await signOut(); window.location.href = '/' }}
             className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
             title="Sign Out"
           >

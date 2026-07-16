@@ -19,6 +19,7 @@ import {
   MoreHorizontal,
 } from 'lucide-react'
 import { useWeddingStore, type Guest } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -251,26 +252,14 @@ export function GuestManager() {
 
     try {
       if (editingGuest) {
-        // Update
-        const res = await fetch(`/api/guests/${editingGuest.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        })
-        if (!res.ok) throw new Error('Failed to update guest')
-        const updated = await res.json()
-        updateGuest(editingGuest.id, updated)
+        const { data: updated, errors } = await client.models.Guest.update({ id: editingGuest.id, ...formData })
+        if (errors) throw new Error(errors[0].message)
+        if (updated) updateGuest(editingGuest.id, updated)
         toast.success(`"${formData.name}" updated successfully`)
       } else {
-        // Create
-        const res = await fetch('/api/guests', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        })
-        if (!res.ok) throw new Error('Failed to create guest')
-        const created = await res.json()
-        addGuest(created)
+        const { data: created, errors } = await client.models.Guest.create(formData)
+        if (errors) throw new Error(errors[0].message)
+        if (created) addGuest(created)
         toast.success(`"${formData.name}" added successfully`)
       }
       closeDialog()
@@ -284,8 +273,8 @@ export function GuestManager() {
   const handleDelete = async () => {
     if (!deleteConfirmGuest) return
     try {
-      const res = await fetch(`/api/guests/${deleteConfirmGuest.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete guest')
+      const { errors } = await client.models.Guest.delete({ id: deleteConfirmGuest.id })
+      if (errors) throw new Error(errors[0].message)
       deleteGuest(deleteConfirmGuest.id)
       toast.success(`"${deleteConfirmGuest.name}" removed`)
     } catch (err) {

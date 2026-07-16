@@ -36,6 +36,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
 import { useWeddingStore, type TimelineEvent } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
 import {
   Plus, Clock, MapPin, Edit, Trash2, Calendar,
   ChevronLeft, ChevronRight,
@@ -201,31 +202,15 @@ export function TimelineView() {
     }
     try {
       if (editingEvent) {
-        const res = await fetch(`/api/timeline/${editingEvent.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        })
-        if (res.ok) {
-          const updated = await res.json()
-          updateTimelineEvent(updated.id, updated)
-          toast.success('Event updated')
-        } else {
-          toast.error('Failed to update event')
-        }
+        const { data: updated, errors } = await client.models.TimelineEvent.update({ id: editingEvent.id, ...formData })
+        if (errors) throw new Error(errors[0].message)
+        if (updated) updateTimelineEvent(updated.id, updated)
+        toast.success('Event updated')
       } else {
-        const res = await fetch('/api/timeline', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...formData, sortOrder: events.length }),
-        })
-        if (res.ok) {
-          const created = await res.json()
-          addTimelineEvent(created)
-          toast.success('Event added')
-        } else {
-          toast.error('Failed to add event')
-        }
+        const { data: created, errors } = await client.models.TimelineEvent.create({ ...formData, sortOrder: events.length })
+        if (errors) throw new Error(errors[0].message)
+        if (created) addTimelineEvent(created)
+        toast.success('Event added')
       }
       setDialogOpen(false)
     } catch {
@@ -236,13 +221,10 @@ export function TimelineView() {
   const handleDelete = async () => {
     if (!deleteConfirmEvent) return
     try {
-      const res = await fetch(`/api/timeline/${deleteConfirmEvent.id}`, { method: 'DELETE' })
-      if (res.ok) {
-        deleteTimelineEvent(deleteConfirmEvent.id)
-        toast.success('Event deleted')
-      } else {
-        toast.error('Failed to delete event')
-      }
+      const { errors } = await client.models.TimelineEvent.delete({ id: deleteConfirmEvent.id })
+      if (errors) throw new Error(errors[0].message)
+      deleteTimelineEvent(deleteConfirmEvent.id)
+      toast.success('Event deleted')
     } catch {
       toast.error('Something went wrong')
     } finally {

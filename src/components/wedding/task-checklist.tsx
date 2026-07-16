@@ -43,6 +43,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { useWeddingStore, type Task } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
 import { ImportCsvDialog } from '@/components/wedding/import-csv-dialog'
 import {
   DndContext,
@@ -401,15 +402,8 @@ export function TaskChecklist() {
     const sameStatus = targetStatus === task.status
     if (!sameStatus) {
       try {
-        const res = await fetch(`/api/tasks/${task.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: targetStatus }),
-        })
-        if (res.ok) {
-          const updated = await res.json()
-          updateTask(updated.id, updated)
-        }
+        const { data: updated, errors } = await client.models.Task.update({ id: task.id, status: targetStatus })
+        if (updated && !errors) updateTask(updated.id, updated)
       } catch {
         toast.error('Failed to move task')
         return
@@ -437,11 +431,7 @@ export function TaskChecklist() {
       try {
         await Promise.all(
           reordered.map((t) =>
-            fetch(`/api/tasks/${t.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sortOrder: t.sortOrder }),
-            })
+            client.models.Task.update({ id: t.id, sortOrder: t.sortOrder })
           )
         )
       } catch {
@@ -481,27 +471,15 @@ export function TaskChecklist() {
     if (!formData.title.trim()) { toast.error('Task title is required'); return }
     try {
       if (editingTask) {
-        const res = await fetch(`/api/tasks/${editingTask.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        })
-        if (res.ok) {
-          const updated = await res.json()
-          updateTask(updated.id, updated)
-          toast.success('Task updated')
-        } else toast.error('Failed to update task')
+        const { data: updated, errors } = await client.models.Task.update({ id: editingTask.id, ...formData })
+        if (errors) throw new Error(errors[0].message)
+        if (updated) updateTask(updated.id, updated)
+        toast.success('Task updated')
       } else {
-        const res = await fetch('/api/tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...formData, sortOrder: tasks.length }),
-        })
-        if (res.ok) {
-          const created = await res.json()
-          addTask(created)
-          toast.success('Task added')
-        } else toast.error('Failed to add task')
+        const { data: created, errors } = await client.models.Task.create({ ...formData, sortOrder: tasks.length })
+        if (errors) throw new Error(errors[0].message)
+        if (created) addTask(created)
+        toast.success('Task added')
       }
       setDialogOpen(false)
     } catch { toast.error('Something went wrong') }
@@ -510,11 +488,10 @@ export function TaskChecklist() {
   const handleDelete = async () => {
     if (!deleteConfirmTask) return
     try {
-      const res = await fetch(`/api/tasks/${deleteConfirmTask.id}`, { method: 'DELETE' })
-      if (res.ok) {
-        deleteTask(deleteConfirmTask.id)
-        toast.success('Task deleted')
-      } else toast.error('Failed to delete task')
+      const { errors } = await client.models.Task.delete({ id: deleteConfirmTask.id })
+      if (errors) throw new Error(errors[0].message)
+      deleteTask(deleteConfirmTask.id)
+      toast.success('Task deleted')
     } catch { toast.error('Something went wrong') }
     finally { setDeleteConfirmTask(null) }
   }
@@ -524,13 +501,8 @@ export function TaskChecklist() {
   const toggleDone = async (task: Task) => {
     const newStatus = task.status === 'done' ? 'todo' : 'done'
     try {
-      const res = await fetch(`/api/tasks/${task.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      })
-      if (res.ok) {
-        const updated = await res.json()
+      const { data: updated, errors } = await client.models.Task.update({ id: task.id, status: newStatus })
+      if (updated && !errors) {
         updateTask(updated.id, updated)
         toast.success(newStatus === 'done' ? 'Task completed!' : 'Task reopened')
       }

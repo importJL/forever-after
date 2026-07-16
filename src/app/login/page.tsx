@@ -2,7 +2,8 @@
 
 import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { signIn, useSession } from 'next-auth/react'
+import { signIn } from 'aws-amplify/auth'
+import { useAmplifySession } from '@/lib/amplify-session-provider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,7 +14,7 @@ import Link from 'next/link'
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { status } = useSession()
+  const { user, loading: sessionLoading } = useAmplifySession()
   const callbackUrl = searchParams.get('callbackUrl') || '/app'
 
   const [email, setEmail] = useState('')
@@ -23,12 +24,20 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (!sessionLoading && user) {
       router.push(callbackUrl)
     }
-  }, [status, router, callbackUrl])
+  }, [user, sessionLoading, router, callbackUrl])
 
-  if (status === 'authenticated') {
+  if (sessionLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (user) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -42,22 +51,16 @@ function LoginForm() {
     setLoading(true)
 
     try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-      })
-
-      if (result?.error) {
-        setError('Invalid email or password')
-        setLoading(false)
-        return
-      }
-
+      await signIn({ username: email, password })
       router.push(callbackUrl)
       router.refresh()
-    } catch {
-      setError('An unexpected error occurred')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred'
+      if (message.includes('UserNotConfirmedException')) {
+        router.push(`/register?email=${encodeURIComponent(email)}&confirm=true`)
+        return
+      }
+      setError(message || 'Invalid email or password')
       setLoading(false)
     }
   }

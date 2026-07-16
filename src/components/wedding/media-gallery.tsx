@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useWeddingStore, type MediaItem } from '@/lib/store'
+import { client } from '@/lib/amplify-client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -275,24 +276,14 @@ export function MediaGallery() {
     try {
       setSubmitting(true)
       if (editingItem) {
-        const res = await fetch(`/api/media/${editingItem.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
-        })
-        if (!res.ok) throw new Error()
-        const updated = await res.json()
-        updateMediaItem(editingItem.id, updated)
+        const { data: updated, errors } = await client.models.MediaItem.update({ id: editingItem.id, ...form })
+        if (errors) throw new Error(errors[0].message)
+        if (updated) updateMediaItem(editingItem.id, updated)
         toast.success('Media updated successfully')
       } else {
-        const res = await fetch('/api/media', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
-        })
-        if (!res.ok) throw new Error()
-        const created = await res.json()
-        addMediaItem(created)
+        const { data: created, errors } = await client.models.MediaItem.create(form)
+        if (errors) throw new Error(errors[0].message)
+        if (created) addMediaItem(created)
         toast.success('Media added successfully')
       }
       setDialogOpen(false)
@@ -306,8 +297,8 @@ export function MediaGallery() {
   const handleDelete = async () => {
     if (!deleteId) return
     try {
-      const res = await fetch(`/api/media/${deleteId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error()
+      const { errors } = await client.models.MediaItem.delete({ id: deleteId })
+      if (errors) throw new Error(errors[0].message)
       deleteMediaItem(deleteId)
       toast.success('Media deleted')
     } catch {
@@ -367,11 +358,7 @@ export function MediaGallery() {
     setMediaItems(updated)
 
     for (const item of updated) {
-      fetch(`/api/media/${item.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sortOrder: item.sortOrder }),
-      }).catch(() => {})
+      client.models.MediaItem.update({ id: item.id, sortOrder: item.sortOrder }).catch(() => {})
     }
 
     setDragId(null)

@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { createServerRunner } from '@aws-amplify/adapter-nextjs'
+import { generateClient } from 'aws-amplify/data'
+import type { Schema } from '@amplify/data/resource'
 import * as XLSX from 'xlsx'
 import mammoth from 'mammoth'
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const outputs = (() => { try { return require('../../../../amplify_outputs.json') } catch { return undefined } })()
+
+const { runWithAmplifyServerContext } = createServerRunner({
+  config: outputs ?? {
+    Auth: { Cognito: { userPoolId: process.env.NEXT_PUBLIC_USER_POOL_ID ?? '', userPoolClientId: process.env.NEXT_PUBLIC_USER_POOL_CLIENT_ID ?? '', identityPoolId: process.env.NEXT_PUBLIC_IDENTITY_POOL_ID ?? '' } },
+    API: { GraphQL: { endpoint: process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT ?? '', region: process.env.NEXT_PUBLIC_AWS_REGION ?? '', defaultAuthMode: 'userPool' as const } },
+  },
+})
 
 function parseYesNo(value: unknown): boolean {
   if (typeof value === 'string') {
@@ -296,12 +308,19 @@ export async function POST(request: NextRequest) {
     if (isConfirm && targetModule === 'guests' && Array.isArray(parsedData)) {
       const guests = parsedData.map((row) => mapCsvRowToGuest(row as CsvRow))
       const created = await Promise.all(
-        guests.map((g) => db.guest.create({ data: g }))
+        guests.map((g) => runWithAmplifyServerContext({
+          nextServerContext: { request, response: NextResponse.next() },
+          operation: async () => {
+            const client = generateClient<Schema>()
+            const { data } = await client.models.Guest.create(g)
+            return data
+          },
+        }))
       )
       return NextResponse.json({
         success: true,
-        data: created,
-        count: created.length,
+        data: created.filter(Boolean),
+        count: created.filter(Boolean).length,
         setupData,
         targetModule,
       })
@@ -313,12 +332,19 @@ export async function POST(request: NextRequest) {
         mapCsvRowToTask(row as TaskCsvRow, i)
       )
       const created = await Promise.all(
-        tasks.map((t) => db.task.create({ data: t }))
+        tasks.map((t) => runWithAmplifyServerContext({
+          nextServerContext: { request, response: NextResponse.next() },
+          operation: async () => {
+            const client = generateClient<Schema>()
+            const { data } = await client.models.Task.create(t)
+            return data
+          },
+        }))
       )
       return NextResponse.json({
         success: true,
-        data: created,
-        count: created.length,
+        data: created.filter(Boolean),
+        count: created.filter(Boolean).length,
         targetModule,
       })
     }
@@ -329,12 +355,19 @@ export async function POST(request: NextRequest) {
         mapCsvRowToVendor(row as VendorCsvRow)
       )
       const created = await Promise.all(
-        vendors.map((v) => db.vendor.create({ data: v }))
+        vendors.map((v) => runWithAmplifyServerContext({
+          nextServerContext: { request, response: NextResponse.next() },
+          operation: async () => {
+            const client = generateClient<Schema>()
+            const { data } = await client.models.Vendor.create(v)
+            return data
+          },
+        }))
       )
       return NextResponse.json({
         success: true,
-        data: created,
-        count: created.length,
+        data: created.filter(Boolean),
+        count: created.filter(Boolean).length,
         targetModule,
       })
     }
@@ -355,16 +388,22 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Store import record for non-guest data
-    await db.importedFile.create({
-      data: {
-        fileName,
-        fileType: ext,
-        content: typeof parsedData === 'string' ? parsedData : '',
-        parsedData: JSON.stringify(parsedData),
-        targetModule,
-      },
-    })
+    // Store import record
+    try {
+      await runWithAmplifyServerContext({
+        nextServerContext: { request, response: NextResponse.next() },
+        operation: async () => {
+          const client = generateClient<Schema>()
+          await client.models.ImportedFile.create({
+            fileName,
+            fileType: ext as 'docx' | 'xlsx' | 'pptx',
+            content: typeof parsedData === 'string' ? parsedData : '',
+            parsedData: JSON.stringify(parsedData),
+            targetModule,
+          })
+        },
+      })
+    } catch { /* non-critical */ }
 
     return NextResponse.json({
       success: true,
