@@ -66,8 +66,12 @@ function RegisterForm() {
     setLoading(true)
 
     try {
-      await confirmSignUp({ username: email, confirmationCode })
-      await signIn({ username: email, password })
+      const { nextStep } = await confirmSignUp({ username: email, confirmationCode })
+
+      if (nextStep.signUpStep !== 'COMPLETE_AUTO_SIGN_IN') {
+        await signIn({ username: email, password })
+      }
+
       setRegistered(true)
       router.push('/app')
       router.refresh()
