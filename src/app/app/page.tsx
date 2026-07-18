@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback, Component, type ReactNode } from 'react'
-import { useWeddingStore, type ViewType } from '@/lib/store'
+import { useWeddingStore, type ViewType, type BudgetCategory, type BudgetExpense } from '@/lib/store'
+import { useAmplifySession } from '@/lib/amplify-session-provider'
 import { WeddingSidebar } from '@/components/wedding/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -87,6 +88,8 @@ const FileImport = createDynamicView(() => import('@/components/wedding/file-imp
 const WebLinks = createDynamicView(() => import('@/components/wedding/web-links').then(m => ({ default: m.WebLinks })))
 const NotificationPanel = createDynamicView(() => import('@/components/wedding/notification-panel').then(m => ({ default: m.NotificationPanel })))
 const SettingsView = createDynamicView(() => import('@/components/wedding/settings-view').then(m => ({ default: m.SettingsView })))
+const AdminView = createDynamicView(() => import('@/components/wedding/admin-view').then(m => ({ default: m.AdminView })))
+const ProfileView = createDynamicView(() => import('@/components/wedding/profile-view').then(m => ({ default: m.ProfileView })))
 
 function ViewSkeleton() {
   return (
@@ -213,6 +216,8 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
 
 export default function AppPage() {
   const { activeView, isLoaded, setIsLoaded, guests, tasks, budgetCategories, vendors, timelineEvents, wedding } = useWeddingStore()
+  const { user } = useAmplifySession()
+  const isAdmin = user?.role === 'admin'
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
   const { theme, setTheme } = useTheme()
@@ -233,6 +238,7 @@ export default function AppPage() {
       client.models.Wedding.list(),
       client.models.Guest.list(),
       client.models.BudgetCategory.list(),
+      client.models.BudgetExpense.list(),
       client.models.Task.list(),
       client.models.Vendor.list(),
       client.models.TimelineEvent.list(),
@@ -241,20 +247,33 @@ export default function AppPage() {
       client.models.Notification.list(),
     ])
     const store = useWeddingStore.getState()
-    const handlers = [
-      (r: { data: unknown[] }) => { if (r.data[0]) store.setWedding(r.data[0] as Parameters<typeof store.setWedding>[0]) },
-      (r: { data: unknown[] }) => store.setGuests(r.data),
-      (r: { data: unknown[] }) => store.setBudgetCategories(r.data),
-      (r: { data: unknown[] }) => store.setTasks(r.data),
-      (r: { data: unknown[] }) => store.setVendors(r.data),
-      (r: { data: unknown[] }) => store.setTimelineEvents(r.data),
-      (r: { data: unknown[] }) => store.setMediaItems(r.data),
-      (r: { data: unknown[] }) => store.setWebLinks(r.data),
-      (r: { data: unknown[] }) => store.setNotifications(r.data),
-    ]
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') handlers[i](r.value)
-    })
+    const [weddingRes, guestRes, catRes, expRes, taskRes, vendorRes, timelineRes, mediaRes, linkRes, notifRes] = results
+
+    if (weddingRes.status === 'fulfilled' && weddingRes.value.data[0]) {
+      store.setWedding(weddingRes.value.data[0] as Parameters<typeof store.setWedding>[0])
+    }
+    if (guestRes.status === 'fulfilled') store.setGuests(guestRes.value.data)
+
+    if (catRes.status === 'fulfilled') {
+      const cats = catRes.value.data as BudgetCategory[]
+      const expenses = expRes.status === 'fulfilled' ? (expRes.value.data as BudgetExpense[]) : []
+      const byCat = new Map<string, BudgetExpense[]>()
+      for (const e of expenses) {
+        if (e.categoryId) {
+          const arr = byCat.get(e.categoryId) ?? []
+          arr.push(e)
+          byCat.set(e.categoryId, arr)
+        }
+      }
+      store.setBudgetCategories(cats.map(c => ({ ...c, expenses: byCat.get(c.id) ?? [] })))
+    }
+
+    if (taskRes.status === 'fulfilled') store.setTasks(taskRes.value.data)
+    if (vendorRes.status === 'fulfilled') store.setVendors(vendorRes.value.data)
+    if (timelineRes.status === 'fulfilled') store.setTimelineEvents(timelineRes.value.data)
+    if (mediaRes.status === 'fulfilled') store.setMediaItems(mediaRes.value.data)
+    if (linkRes.status === 'fulfilled') store.setWebLinks(linkRes.value.data)
+    if (notifRes.status === 'fulfilled') store.setNotifications(notifRes.value.data)
   }, [])
 
   useEffect(() => {
@@ -376,6 +395,8 @@ export default function AppPage() {
       case 'links': return <WebLinks />
       case 'notifications': return <NotificationPanel />
       case 'settings': return <SettingsView />
+      case 'admin': return <AdminView />
+      case 'profile': return <ProfileView />
       default: return <DashboardView />
     }
   }
@@ -410,11 +431,7 @@ export default function AppPage() {
             </svg>
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-rose-600 flex items-center justify-center">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
-              </svg>
-            </div>
+            <img src="/logo2.png" alt="ForeverAfter" className="w-7 h-7 rounded-lg object-contain" />
             <span className="font-[family-name:var(--font-playfair)] text-base font-semibold">ForeverAfter</span>
           </div>
         </header>
@@ -460,23 +477,27 @@ export default function AppPage() {
                 </div>
               </div>
               <h2 className="text-2xl md:text-3xl font-[family-name:var(--font-playfair)] font-semibold text-foreground mb-3">
-                Welcome to ForeverAfter
+                {user?.firstName ? `Welcome, ${user.firstName}!` : 'Welcome to ForeverAfter'}
               </h2>
               <p className="text-muted-foreground max-w-md mb-2">
-                Your all-in-one wedding planning companion. Get started by loading demo data or setting up your wedding details.
+                {isAdmin
+                  ? 'Your all-in-one wedding planning companion. Get started by loading demo data or setting up your wedding details.'
+                  : 'Your wedding planner is being set up by your team. Check back soon!'}
               </p>
               <p className="text-sm text-muted-foreground/70 mb-8">
                 Plan, budget, organize, and manage every detail of your special day.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button onClick={loadDemoData} size="lg" className="gap-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white shadow-lg shadow-rose-500/25">
-                  <Sparkles className="w-4 h-4" />
-                  Load Demo Data
-                </Button>
-                <Button onClick={() => useWeddingStore.getState().setActiveView('settings')} variant="outline" size="lg" className="gap-2">
-                  Set Up Your Wedding
-                </Button>
-              </div>
+              {isAdmin && (
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button onClick={loadDemoData} size="lg" className="gap-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white shadow-lg shadow-rose-500/25">
+                    <Sparkles className="w-4 h-4" />
+                    Load Demo Data
+                  </Button>
+                  <Button onClick={() => useWeddingStore.getState().setActiveView('settings')} variant="outline" size="lg" className="gap-2">
+                    Set Up Your Wedding
+                  </Button>
+                </div>
+              )}
               <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl">
                 {[
                   { icon: '👥', label: 'Guest Management', desc: 'RSVP tracking' },
@@ -493,7 +514,7 @@ export default function AppPage() {
               </div>
             </div>
           ) : (
-            <div className="animate-fade-in-up">
+            <div className="animate-fade-in-up p-6">
               {renderView()}
             </div>
           )}

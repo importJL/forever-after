@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description: "Your all-in-one wedding planning companion. Plan, budget, organize, and manage every detail of your special day.",
   keywords: ["wedding", "planner", "budget", "guests", "timeline", "wedding planning"],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: '/logo2.png',
   },
   openGraph: {
     title: "ForeverAfter — Wedding Planner",

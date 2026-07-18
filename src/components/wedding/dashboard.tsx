@@ -37,6 +37,7 @@ import {
   Gift,
 } from 'lucide-react'
 import { useWeddingStore } from '@/lib/store'
+import { useAmplifySession } from '@/lib/amplify-session-provider'
 import { LocationLink } from '@/components/map/location-link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -231,6 +232,8 @@ export function DashboardView() {
     notifications,
     setActiveView,
   } = useWeddingStore()
+  const { user } = useAmplifySession()
+  const isAdmin = user?.role === 'admin'
 
   // Derived data
   const guestStats = useMemo(() => {
@@ -301,9 +304,34 @@ export function DashboardView() {
 
   // Show setup prompt if no wedding date
   if (!hasWeddingDate) {
+    if (isAdmin) {
+      return (
+        <div className="p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto">
+          <SetupPrompt onNavigate={() => setActiveView('settings')} />
+        </div>
+      )
+    }
     return (
       <div className="p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto">
-        <SetupPrompt onNavigate={() => setActiveView('settings')} />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <Card className="border-dashed border-2 border-rose-200 dark:border-rose-900/50 bg-gradient-to-br from-rose-50/80 to-amber-50/50 dark:from-rose-950/20 dark:to-amber-950/10">
+            <CardContent className="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-rose-100 to-rose-200 dark:from-rose-900/30 dark:to-rose-800/30 flex items-center justify-center mb-6">
+                <Heart className="w-10 h-10 text-rose-500" />
+              </div>
+              <h2 className="text-2xl font-semibold text-foreground mb-2">
+                Welcome{user?.firstName ? `, ${user.firstName}` : ''}!
+              </h2>
+              <p className="text-muted-foreground max-w-md mb-6">
+                Your wedding planner is being set up. Check back soon or contact your planner for updates.
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     )
   }
@@ -324,6 +352,11 @@ export function DashboardView() {
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/3" />
 
             <div className="relative z-10">
+              {user?.firstName && (
+                <p className="text-rose-100/80 text-sm mb-1">
+                  Welcome back, {user.firstName}
+                </p>
+              )}
               <div className="flex items-center gap-2 mb-3">
                 <Heart className="w-5 h-5 text-rose-200" fill="currentColor" />
                 <span className="text-rose-200 text-sm font-medium tracking-wide uppercase">

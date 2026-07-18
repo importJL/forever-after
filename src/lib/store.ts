@@ -13,6 +13,8 @@ export type ViewType =
   | 'links' 
   | 'notifications'
   | 'settings'
+  | 'admin'
+  | 'profile'
 
 export interface Guest {
   id: string

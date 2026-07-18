@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { getCurrentUser, signOut as amplifySignOut } from 'aws-amplify/auth';
+import { getCurrentUser, signOut as amplifySignOut, fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
 import { configureAmplify } from '@/lib/amplify-config';
 
 configureAmplify();
@@ -10,36 +10,92 @@ export interface AuthUser {
   userId: string;
   username: string;
   email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
+  refreshUser: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  refreshUser: async () => {},
   signOut: async () => {},
 });
+
+function deriveRole(groups: string[]): string {
+  if (groups.includes('admin')) return 'admin';
+  if (groups.includes('full')) return 'full';
+  if (groups.includes('readwrite')) return 'readwrite';
+  if (groups.includes('readonly')) return 'readonly';
+  return 'readwrite';
+}
+
+function collectGroups(groupsA: string[] | undefined, groupsB: string[] | undefined): string[] {
+  const set = new Set<string>();
+  for (const g of groupsA ?? []) set.add(g);
+  for (const g of groupsB ?? []) set.add(g);
+  return [...set];
+}
+
+function splitName(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(' ');
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' ') || '',
+  };
+}
+
+async function fetchCurrentUser(): Promise<AuthUser> {
+  const u = await getCurrentUser();
+  const attrs = await fetchUserAttributes();
+  const session = await fetchAuthSession();
+  const accessGroups = session.tokens?.accessToken?.payload?.['cognito:groups'] as string[] | undefined;
+  const idGroups = session.tokens?.idToken?.payload?.['cognito:groups'] as string[] | undefined;
+  const groups = collectGroups(accessGroups, idGroups);
+  const role = deriveRole(groups);
+  const email = attrs.email || u.signInDetails?.loginId || '';
+  const { firstName, lastName } = splitName(attrs.name || '');
+
+  return {
+    userId: u.userId,
+    username: u.username,
+    email,
+    firstName,
+    lastName,
+    role,
+  };
+}
 
 export function AmplifySessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const loadUser = async () => {
+    try {
+      const u = await fetchCurrentUser();
+      setUser(u);
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    getCurrentUser()
-      .then((u) =>
-        setUser({
-          userId: u.userId,
-          username: u.username,
-          email: u.signInDetails?.loginId ?? '',
-        }),
-      )
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+    loadUser();
   }, []);
+
+  const refreshUser = async () => {
+    setLoading(true);
+    await loadUser();
+  };
 
   const signOut = async () => {
     await amplifySignOut();
@@ -47,7 +103,7 @@ export function AmplifySessionProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut }}>
+    <AuthContext.Provider value={{ user, loading, refreshUser, signOut }}>
       {children}
     </AuthContext.Provider>
   );

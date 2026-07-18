@@ -1,15 +1,26 @@
 'use client'
 
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { signUp, confirmSignUp, signIn } from 'aws-amplify/auth'
+import { signUp, confirmSignUp, signIn, getCurrentUser } from 'aws-amplify/auth'
 import { useAmplifySession } from '@/lib/amplify-session-provider'
+import { client } from '@/lib/amplify-client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Heart, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react'
+import { Heart, Eye, EyeOff, Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import Link from 'next/link'
+
+function passwordChecks(pw: string) {
+  return {
+    minLength: pw.length >= 8,
+    hasUpper: /[A-Z]/.test(pw),
+    hasLower: /[a-z]/.test(pw),
+    hasNumber: /[0-9]/.test(pw),
+    hasSymbol: /[^a-zA-Z0-9]/.test(pw),
+  }
+}
 
 function RegisterForm() {
   const router = useRouter()
@@ -25,6 +36,9 @@ function RegisterForm() {
   const [registered, setRegistered] = useState(false)
   const [needsConfirmation, setNeedsConfirmation] = useState(searchParams.get('confirm') === 'true')
   const [confirmationCode, setConfirmationCode] = useState('')
+
+  const checks = useMemo(() => passwordChecks(password), [password])
+  const canSubmit = checks.minLength && checks.hasUpper && checks.hasLower && checks.hasNumber
 
   useEffect(() => {
     if (!sessionLoading && user) {
@@ -71,6 +85,15 @@ function RegisterForm() {
       if (nextStep.signUpStep !== 'COMPLETE_AUTO_SIGN_IN') {
         await signIn({ username: email, password })
       }
+
+      const currentUser = await getCurrentUser()
+      const nameParts = name.trim().split(' ')
+      await client.models.Member.create({
+        userId: currentUser.userId,
+        email,
+        firstName: nameParts[0] || '',
+        lastName: nameParts.slice(1).join(' ') || '',
+      })
 
       setRegistered(true)
       router.push('/app')
@@ -145,6 +168,19 @@ function RegisterForm() {
     )
   }
 
+  const CheckRow = ({ pass, label }: { pass: boolean; label: string }) => (
+    <div className="flex items-center gap-1.5 text-xs">
+      {pass ? (
+        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+      ) : (
+        <XCircle className="w-3 h-3 text-muted-foreground/50" />
+      )}
+      <span className={pass ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}>
+        {label}
+      </span>
+    </div>
+  )
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-border bg-background/50">
@@ -182,15 +218,36 @@ function RegisterForm() {
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
-                  <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="At least 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete="new-password" className="pr-10" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="At least 8 characters"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1">
+                  <CheckRow pass={checks.minLength} label="At least 8 characters" />
+                  <CheckRow pass={checks.hasUpper} label="One uppercase letter" />
+                  <CheckRow pass={checks.hasLower} label="One lowercase letter" />
+                  <CheckRow pass={checks.hasNumber} label="One number" />
+                  <CheckRow pass={checks.hasSymbol} label="One symbol (recommended)" />
                 </div>
               </div>
             </CardContent>
             <CardFooter className="flex-col gap-4 pt-2">
-              <Button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white shadow-lg shadow-rose-500/25 h-11">
+              <Button type="submit" disabled={loading || !canSubmit} className="w-full bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white shadow-lg shadow-rose-500/25 h-11">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Account'}
               </Button>
               <p className="text-sm text-muted-foreground text-center">

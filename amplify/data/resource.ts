@@ -1,4 +1,5 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { setUserRole as setUserRoleFn } from '../functions/set-user-role/resource';
 
 const schema = a.schema({
   RsvpStatus: a.enum(['pending', 'accepted', 'declined', 'maybe']),
@@ -10,7 +11,7 @@ const schema = a.schema({
   MediaCategory: a.enum(['inspiration', 'photo', 'video', 'mood_board']),
   WebLinkCategory: a.enum(['general', 'registry', 'venue', 'vendor', 'inspiration', 'travel']),
   NotificationType: a.enum(['info', 'warning', 'success', 'reminder']),
-  TimelineCategory: a.enum(['ceremony', 'reception', 'photos', 'preparation', 'transport', 'other']),
+  TimelineCategory: a.enum(['ceremony', 'reception', 'photos', 'preparation', 'transport', 'other', 'cocktail', 'dinner', 'dancing']),
   ImportedFileType: a.enum(['docx', 'xlsx', 'pptx']),
 
   Wedding: a.model({
@@ -27,7 +28,11 @@ const schema = a.schema({
     guestCount: a.integer().default(0),
     budgetTotal: a.float().default(0),
     notes: a.string().default(''),
-  }).authorization((allow) => [allow.owner()]),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   Guest: a.model({
     name: a.string().required(),
@@ -55,7 +60,11 @@ const schema = a.schema({
     giftReceived: a.string().default(''),
     thankYouSent: a.boolean().default(false),
     notes: a.string().default(''),
-  }).authorization((allow) => [allow.owner()]),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   BudgetCategory: a.model({
     name: a.string().required(),
@@ -65,7 +74,11 @@ const schema = a.schema({
     color: a.string().default('#e11d48'),
     sortOrder: a.integer().default(0),
     expenses: a.hasMany('BudgetExpense', 'categoryId'),
-  }).authorization((allow) => [allow.owner()]),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   BudgetExpense: a.model({
     categoryId: a.id(),
@@ -76,7 +89,11 @@ const schema = a.schema({
     paid: a.boolean().default(false),
     notes: a.string().default(''),
     category: a.belongsTo('BudgetCategory', 'categoryId'),
-  }).authorization((allow) => [allow.owner()]),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   Task: a.model({
     title: a.string().required(),
@@ -88,7 +105,11 @@ const schema = a.schema({
     assignee: a.string().default(''),
     notes: a.string().default(''),
     sortOrder: a.integer().default(0),
-  }).authorization((allow) => [allow.owner()]),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   Vendor: a.model({
     name: a.string().required(),
@@ -106,18 +127,27 @@ const schema = a.schema({
     rating: a.integer().default(0),
     notes: a.string().default(''),
     contractDate: a.string().default(''),
-  }).authorization((allow) => [allow.owner()]),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   TimelineEvent: a.model({
     title: a.string().required(),
     description: a.string().default(''),
+    eventDate: a.string().default(''),
     startTime: a.string().required(),
     endTime: a.string().default(''),
     location: a.string().default(''),
     category: a.ref('TimelineCategory'),
     notes: a.string().default(''),
     sortOrder: a.integer().default(0),
-  }).authorization((allow) => [allow.owner()]),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   MediaItem: a.model({
     title: a.string().default(''),
@@ -127,7 +157,11 @@ const schema = a.schema({
     category: a.ref('MediaCategory'),
     notes: a.string().default(''),
     sortOrder: a.integer().default(0),
-  }).authorization((allow) => [allow.owner()]),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   WebLink: a.model({
     title: a.string().required(),
@@ -136,7 +170,11 @@ const schema = a.schema({
     category: a.ref('WebLinkCategory'),
     icon: a.string().default('Link'),
     sortOrder: a.integer().default(0),
-  }).authorization((allow) => [allow.owner()]),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   Notification: a.model({
     title: a.string().required(),
@@ -144,7 +182,13 @@ const schema = a.schema({
     type: a.ref('NotificationType'),
     read: a.boolean().default(false),
     relatedTo: a.string().default(''),
-  }).authorization((allow) => [allow.owner()]),
+    recipients: a.string().array(),
+    link: a.string().default(''),
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
 
   ImportedFile: a.model({
     fileName: a.string().required(),
@@ -152,8 +196,31 @@ const schema = a.schema({
     content: a.string().default(''),
     parsedData: a.string().default(''),
     targetModule: a.string().default(''),
-  }).authorization((allow) => [allow.owner()]),
-});
+  }).authorization((allow) => [
+    allow.groups(['admin', 'full']).to(['create', 'read', 'update', 'delete']),
+    allow.groups(['readwrite']).to(['create', 'read', 'update']),
+    allow.groups(['readonly']).to(['read']),
+  ]),
+
+  Member: a.model({
+    userId: a.string().required(),
+    email: a.string().default(''),
+    firstName: a.string().default(''),
+    lastName: a.string().default(''),
+    role: a.string().default('readwrite'),
+  }).authorization((allow) => [
+    allow.ownerDefinedIn('userId').to(['create', 'read', 'update']),
+    allow.group('admin').to(['create', 'read', 'update', 'delete']),
+  ]),
+
+  setUserRole: a
+    .mutation()
+    .arguments({ userId: a.string(), role: a.string(), userPoolId: a.string() })
+    .returns(a.json())
+    .authorization((allow) => [allow.group('admin')])
+    .handler(a.handler.function(setUserRoleFn)),
+
+}).authorization((allow) => []);
 
 export type Schema = ClientSchema<typeof schema>;
 

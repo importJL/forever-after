@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useWeddingStore, ViewType } from '@/lib/store'
+import { useAmplifySession } from '@/lib/amplify-session-provider'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -33,6 +34,8 @@ import {
   Moon,
   Download,
   LogOut,
+  Shield,
+  User,
 } from 'lucide-react'
 
 interface NavItem {
@@ -42,27 +45,31 @@ interface NavItem {
   badge?: string
 }
 
-const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'guests', label: 'Guests', icon: Users },
-  { id: 'budget', label: 'Budget', icon: Wallet },
-  { id: 'tasks', label: 'Tasks', icon: ListChecks },
-  { id: 'vendors', label: 'Vendors', icon: Store },
-  { id: 'timeline', label: 'Timeline', icon: Clock },
-  { id: 'media', label: 'Media', icon: Image },
-  { id: 'seating', label: 'Seating', icon: Armchair },
-  { id: 'links', label: 'Web Links', icon: Link2 },
-  { id: 'import', label: 'Import Files', icon: FileUp },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'settings', label: 'Settings', icon: Settings },
-]
-
 export function WeddingSidebar() {
   const { activeView, setActiveView, sidebarOpen, setSidebarOpen, notifications, wedding, guests, tasks, budgetCategories, vendors, timelineEvents, mediaItems, webLinks } = useWeddingStore()
+  const { user } = useAmplifySession()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   const unreadCount = notifications.filter(n => !n.read).length
+  const isAdmin = user?.role === 'admin'
+
+  const navItems: NavItem[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'guests', label: 'Guests', icon: Users },
+    { id: 'budget', label: 'Budget', icon: Wallet },
+    { id: 'tasks', label: 'Tasks', icon: ListChecks },
+    { id: 'vendors', label: 'Vendors', icon: Store },
+    { id: 'timeline', label: 'Timeline', icon: Clock },
+    { id: 'media', label: 'Media', icon: Image },
+    { id: 'seating', label: 'Seating', icon: Armchair },
+    { id: 'links', label: 'Web Links', icon: Link2 },
+    { id: 'import', label: 'Import Files', icon: FileUp },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'profile', label: 'Profile', icon: User },
+    ...(isAdmin ? [{ id: 'admin' as ViewType, label: 'Admin', icon: Shield }] : []),
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ]
 
   const handleExport = () => {
     const data = {
@@ -95,9 +102,7 @@ export function WeddingSidebar() {
     >
       {/* Logo / Brand */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-border shrink-0">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500 via-rose-500 to-pink-600 text-white shrink-0 shadow-lg shadow-rose-500/20">
-          <Heart className="w-5 h-5 fill-white" />
-        </div>
+        <img src="/logo2.png" alt="ForeverAfter" className="w-9 h-9 rounded-xl object-contain shrink-0 shadow-lg shadow-rose-500/20" />
         {sidebarOpen && (
           <div className="flex flex-col min-w-0 animate-fade-in-up">
             <span className="font-[family-name:var(--font-playfair)] text-lg font-semibold tracking-tight truncate text-foreground">

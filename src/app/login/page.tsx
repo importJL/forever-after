@@ -68,9 +68,7 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-md border-border/50 shadow-lg">
       <CardHeader className="text-center pb-2">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-100 to-amber-100 dark:from-rose-950/40 dark:to-amber-950/40 flex items-center justify-center mx-auto mb-4">
-          <Heart className="w-6 h-6 text-rose-500" />
-        </div>
+            <img src="/logo2.png" alt="ForeverAfter" className="w-12 h-12 rounded-xl object-contain mx-auto mb-4" />
         <CardTitle className="text-2xl font-[family-name:var(--font-playfair)]">Welcome Back</CardTitle>
         <CardDescription>Sign in to your wedding planner</CardDescription>
       </CardHeader>
@@ -146,9 +144,7 @@ export default function LoginPage() {
       <header className="border-b border-border bg-background/50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-rose-600 flex items-center justify-center shadow-sm">
-              <Heart className="w-4 h-4 text-white fill-white" />
-            </div>
+            <img src="/logo2.png" alt="ForeverAfter" className="w-8 h-8 rounded-lg object-contain shadow-sm" />
             <span className="font-[family-name:var(--font-playfair)] text-lg font-semibold">ForeverAfter</span>
           </Link>
         </div>

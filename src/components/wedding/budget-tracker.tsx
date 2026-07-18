@@ -85,6 +85,10 @@ function getProgressColor(pct: number): string {
   return 'bg-rose-500'
 }
 
+function categorySpent(c: BudgetCategory): number {
+  return (c.expenses ?? []).reduce((s, e) => s + (e.amount || 0), 0)
+}
+
 const PREDEFINED_COLORS = [
   { label: 'Rose', value: '#e11d48' },
   { label: 'Amber', value: '#f59e0b' },
@@ -161,8 +165,21 @@ export function BudgetTracker() {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const { data } = await client.models.BudgetCategory.list()
-      if (data) setBudgetCategories(data)
+      const [{ data: cats }, { data: exps }] = await Promise.all([
+        client.models.BudgetCategory.list(),
+        client.models.BudgetExpense.list(),
+      ])
+      if (cats) {
+        const byCat = new Map<string, BudgetExpense[]>()
+        ;(exps ?? []).forEach((e) => {
+          if (e.categoryId) {
+            const arr = byCat.get(e.categoryId) ?? []
+            arr.push(e)
+            byCat.set(e.categoryId, arr)
+          }
+        })
+        setBudgetCategories(cats.map((c) => ({ ...c, expenses: byCat.get(c.id) ?? [] })))
+      }
     } catch {
       toast.error('Failed to load budget data')
     }
@@ -378,7 +395,7 @@ export function BudgetTracker() {
     (sum, c) => sum + c.budgeted,
     0
   )
-  const totalSpent = budgetCategories.reduce((sum, c) => sum + c.spent, 0)
+  const totalSpent = budgetCategories.reduce((sum, c) => sum + categorySpent(c), 0)
   const totalBudget = wedding.budgetTotal > 0 ? wedding.budgetTotal : totalAllocated
   const remaining = totalBudget - totalSpent
   const overallPct = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0
@@ -391,10 +408,10 @@ export function BudgetTracker() {
   }))
 
   const spendingData = budgetCategories
-    .filter((c) => c.spent > 0)
+    .filter((c) => categorySpent(c) > 0)
     .map((c) => ({
       name: c.name,
-      value: c.spent,
+      value: categorySpent(c),
       color: c.color,
     }))
 
@@ -402,7 +419,7 @@ export function BudgetTracker() {
     name: c.name.length > 10 ? c.name.slice(0, 10) + '…' : c.name,
     fullName: c.name,
     budgeted: c.budgeted,
-    spent: c.spent,
+    spent: categorySpent(c),
     color: c.color,
   }))
 
@@ -664,9 +681,9 @@ export function BudgetTracker() {
           </Card>
         ) : (
           budgetCategories.map((cat) => {
-            const catPct = cat.budgeted > 0 ? (cat.spent / cat.budgeted) * 100 : 0
+            const catPct = cat.budgeted > 0 ? (categorySpent(cat) / cat.budgeted) * 100 : 0
             const isExpanded = expandedIds.has(cat.id)
-            const catRemaining = cat.budgeted - cat.spent
+            const catRemaining = cat.budgeted - categorySpent(cat)
 
             return (
               <Card key={cat.id}>
@@ -725,7 +742,7 @@ export function BudgetTracker() {
                         </div>
                         <div>
                           <span className="text-muted-foreground">Spent</span>
-                          <p className="font-medium">{formatCurrency(cat.spent)}</p>
+                          <p className="font-medium">{formatCurrency(categorySpent(cat))}</p>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Remaining</span>
@@ -761,13 +778,13 @@ export function BudgetTracker() {
                       </div>
 
                       {/* Expense count summary (always visible) */}
-                      {cat.expenses.length > 0 && (
+                      {(cat.expenses ?? []).length > 0 && (
                         <button
                           onClick={() => toggleExpand(cat.id)}
                           className="mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
-                          {cat.expenses.length} expense{cat.expenses.length !== 1 ? 's' : ''} &middot;{' '}
-                          {formatCurrency(cat.expenses.reduce((s, e) => s + e.amount, 0))} total
+                          {(cat.expenses ?? []).length} expense{(cat.expenses ?? []).length !== 1 ? 's' : ''} &middot;{' '}
+                          {formatCurrency((cat.expenses ?? []).reduce((s, e) => s + e.amount, 0))} total
                         </button>
                       )}
                     </div>
@@ -778,13 +795,13 @@ export function BudgetTracker() {
                     <>
                       <Separator className="my-4" />
                       <div className="space-y-2">
-                        {cat.expenses.length === 0 ? (
-                          <p className="py-4 text-center text-sm text-muted-foreground">
-                            No expenses recorded yet. Click &quot;Add Expense&quot; to get started.
-                          </p>
+                            {(cat.expenses ?? []).length === 0 ? (
+                              <p className="py-4 text-center text-sm text-muted-foreground">
+                                No expenses recorded yet. Click &quot;Add Expense&quot; to get started.
+                              </p>
                         ) : (
                           <div className="space-y-2">
-                            {cat.expenses.map((exp) => (
+                                {(cat.expenses ?? []).map((exp) => (
                               <div
                                 key={exp.id}
                                 className="flex items-center gap-3 rounded-lg border p-3"
