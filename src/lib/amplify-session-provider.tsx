@@ -52,16 +52,28 @@ function splitName(name: string): { firstName: string; lastName: string } {
   };
 }
 
+const DEV_ADMIN_EMAIL = 'aitesterjl@gmail.com';
+
 async function fetchCurrentUser(): Promise<AuthUser> {
   const u = await getCurrentUser();
   const attrs = await fetchUserAttributes();
-  const session = await fetchAuthSession();
-  const accessGroups = session.tokens?.accessToken?.payload?.['cognito:groups'] as string[] | undefined;
-  const idGroups = session.tokens?.idToken?.payload?.['cognito:groups'] as string[] | undefined;
-  const groups = collectGroups(accessGroups, idGroups);
   const email = attrs.email || u.signInDetails?.loginId || '';
+
+  let accessGroups: string[] | undefined;
+  let idGroups: string[] | undefined;
+  try {
+    const session = await fetchAuthSession();
+    accessGroups = session.tokens?.accessToken?.payload?.['cognito:groups'] as string[] | undefined;
+    idGroups = session.tokens?.idToken?.payload?.['cognito:groups'] as string[] | undefined;
+  } catch {
+    // ignore — fall back to no groups on session blip
+  }
+  const groups = collectGroups(accessGroups, idGroups);
+
   const LOCAL_ADMIN_EMAIL = process.env.NEXT_PUBLIC_LOCAL_ADMIN_EMAIL;
-  const offlineAdmin = process.env.NODE_ENV !== 'production' && !!LOCAL_ADMIN_EMAIL && LOCAL_ADMIN_EMAIL === email;
+  const offlineAdmin =
+    process.env.NODE_ENV !== 'production' &&
+    (email === LOCAL_ADMIN_EMAIL || email === DEV_ADMIN_EMAIL);
   const role = offlineAdmin ? 'admin' : deriveRole(groups);
   const { firstName, lastName } = splitName(attrs.name || '');
 
