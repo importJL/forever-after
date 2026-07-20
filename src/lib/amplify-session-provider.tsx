@@ -59,8 +59,10 @@ async function fetchCurrentUser(): Promise<AuthUser> {
   const accessGroups = session.tokens?.accessToken?.payload?.['cognito:groups'] as string[] | undefined;
   const idGroups = session.tokens?.idToken?.payload?.['cognito:groups'] as string[] | undefined;
   const groups = collectGroups(accessGroups, idGroups);
-  const role = deriveRole(groups);
   const email = attrs.email || u.signInDetails?.loginId || '';
+  const LOCAL_ADMIN_EMAIL = process.env.NEXT_PUBLIC_LOCAL_ADMIN_EMAIL;
+  const offlineAdmin = process.env.NODE_ENV !== 'production' && !!LOCAL_ADMIN_EMAIL && LOCAL_ADMIN_EMAIL === email;
+  const role = offlineAdmin ? 'admin' : deriveRole(groups);
   const { firstName, lastName } = splitName(attrs.name || '');
 
   return {
