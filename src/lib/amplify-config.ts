@@ -1,15 +1,27 @@
 import { Amplify } from 'aws-amplify';
-import type { ResourcesConfig } from 'aws-amplify';
+import outputs from '../../amplify_outputs.json';
 
 let configured = false;
 
-function buildAmplifyConfig(): ResourcesConfig {
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable: ${name}. ` +
+      `Set it in Amplify Console Environment Variables or in .env.local`
+    );
+  }
+  return value;
+}
+
+function buildAmplifyConfig() {
   return {
+    version: '1.4',
     auth: {
-      user_pool_id: process.env.NEXT_PUBLIC_USER_POOL_ID!,
-      aws_region: process.env.NEXT_PUBLIC_AWS_REGION!,
-      user_pool_client_id: process.env.NEXT_PUBLIC_USER_POOL_CLIENT_ID!,
-      identity_pool_id: process.env.NEXT_PUBLIC_IDENTITY_POOL_ID!,
+      user_pool_id: requireEnv('NEXT_PUBLIC_USER_POOL_ID'),
+      aws_region: requireEnv('NEXT_PUBLIC_AWS_REGION'),
+      user_pool_client_id: requireEnv('NEXT_PUBLIC_USER_POOL_CLIENT_ID'),
+      identity_pool_id: requireEnv('NEXT_PUBLIC_IDENTITY_POOL_ID'),
       mfa_methods: [],
       standard_required_attributes: ['email'],
       username_attributes: ['email'],
@@ -31,10 +43,11 @@ function buildAmplifyConfig(): ResourcesConfig {
       unauthenticated_identities_enabled: true,
     },
     data: {
-      url: process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT!,
-      aws_region: process.env.NEXT_PUBLIC_AWS_REGION!,
+      url: requireEnv('NEXT_PUBLIC_GRAPHQL_ENDPOINT'),
+      aws_region: requireEnv('NEXT_PUBLIC_AWS_REGION'),
       default_authorization_type: 'AMAZON_COGNITO_USER_POOLS',
       authorization_types: ['AWS_IAM'],
+      model_introspection: outputs.data.model_introspection,
     },
   };
 }

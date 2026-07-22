@@ -70,5 +70,8 @@ db/
 
 # amplify
 .amplify
-amplify_outputs*
+amplify_outputs.ts
+amplify_outputs.mjs
+amplify_outputs.dart
+amplify_outputs.json-mobile
 amplifyconfiguration*
