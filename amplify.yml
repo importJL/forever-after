@@ -7,11 +7,9 @@ frontend:
         - bun install
     build:
       commands:
-        - env | grep NEXT_PUBLIC_ > .env.production
         - bun run build
-        - cp -r public/* out/
   artifacts:
-    baseDirectory: out
+    baseDirectory: .next
     files:
       - '**/*'
   cache:
