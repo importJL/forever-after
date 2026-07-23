@@ -71,9 +71,7 @@ async function fetchCurrentUser(): Promise<AuthUser> {
   const groups = collectGroups(accessGroups, idGroups);
 
   const LOCAL_ADMIN_EMAIL = process.env.NEXT_PUBLIC_LOCAL_ADMIN_EMAIL;
-  const offlineAdmin =
-    process.env.NODE_ENV !== 'production' &&
-    (email === LOCAL_ADMIN_EMAIL || email === DEV_ADMIN_EMAIL);
+  const offlineAdmin = email === LOCAL_ADMIN_EMAIL || email === DEV_ADMIN_EMAIL;
   const role = offlineAdmin ? 'admin' : deriveRole(groups);
   const { firstName, lastName } = splitName(attrs.name || '');
 
