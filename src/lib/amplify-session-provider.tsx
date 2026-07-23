@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getCurrentUser, signOut as amplifySignOut, fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
+import { Hub } from 'aws-amplify/utils';
 import { configureAmplify } from '@/lib/amplify-config';
 
 configureAmplify();
@@ -102,6 +103,11 @@ export function AmplifySessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadUser();
+    const unsubscribe = Hub.listen('auth', ({ payload }) => {
+      if (payload.event === 'signedIn') loadUser();
+      if (payload.event === 'signedOut') setUser(null);
+    });
+    return () => unsubscribe();
   }, []);
 
   const refreshUser = async () => {
