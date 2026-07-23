@@ -631,7 +631,7 @@ export function TimelineView() {
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center justify-start gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex-row-reverse">
+                        <div className="flex items-center justify-start gap-1 mt-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-row-reverse">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(event)}>
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
@@ -700,7 +700,7 @@ export function TimelineView() {
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center justify-end gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-1 mt-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(event)}>
                             <Edit className="h-3.5 w-3.5" />
                           </Button>

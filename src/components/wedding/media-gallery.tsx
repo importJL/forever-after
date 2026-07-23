@@ -956,7 +956,7 @@ export function MediaGallery() {
                       >
                       <Card className="group overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 py-0 gap-0">
                         {/* Drag handle */}
-                        <div className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing rounded-md bg-white/80 dark:bg-gray-900/80 p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing rounded-md bg-white/80 dark:bg-gray-900/80 p-1 shadow-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                           <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
 

@@ -45,7 +45,7 @@ interface NavItem {
   badge?: string
 }
 
-export function WeddingSidebar() {
+export function WeddingSidebar({ onNavClick }: { onNavClick?: () => void }) {
   const { activeView, setActiveView, sidebarOpen, setSidebarOpen, notifications, wedding, guests, tasks, budgetCategories, vendors, timelineEvents, mediaItems, webLinks } = useWeddingStore()
   const { user } = useAmplifySession()
   const { theme, setTheme } = useTheme()
@@ -167,7 +167,7 @@ export function WeddingSidebar() {
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent',
                   !sidebarOpen && 'justify-center px-0'
                 )}
-                onClick={() => setActiveView(item.id)}
+                onClick={() => { setActiveView(item.id); onNavClick?.() }}
               >
                 <Icon className={cn(
                   'w-[18px] h-[18px] shrink-0 transition-colors',

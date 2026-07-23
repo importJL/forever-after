@@ -218,26 +218,28 @@ export function AdminView() {
             ) : (
               <div className="space-y-3">
                 {members.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center gap-4 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-100 to-amber-100 dark:from-rose-900/30 dark:to-amber-900/30 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-semibold text-rose-600 dark:text-rose-400">
-                        {(member.firstName?.[0] || member.email?.[0] || '?').toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {member.firstName && member.lastName
-                          ? `${member.firstName} ${member.lastName}`
-                          : member.email || 'Unknown'}
-                      </p>
-                      {member.email && (
-                        <p className="text-xs text-muted-foreground truncate">{member.email}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div
+                      key={member.id}
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-100 to-amber-100 dark:from-rose-900/30 dark:to-amber-900/30 flex items-center justify-center shrink-0">
+                          <span className="text-sm font-semibold text-rose-600 dark:text-rose-400">
+                            {(member.firstName?.[0] || member.email?.[0] || '?').toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {member.firstName && member.lastName
+                              ? `${member.firstName} ${member.lastName}`
+                              : member.email || 'Unknown'}
+                          </p>
+                          {member.email && (
+                            <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
                       <Badge
                         variant="outline"
                         className={ROLE_COLORS[member.role] || ROLE_COLORS.readwrite}

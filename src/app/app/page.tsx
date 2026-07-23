@@ -406,14 +406,14 @@ export default function AppPage() {
   return (
     <div className="flex min-h-screen">
       <div className="hidden md:block shrink-0">
-        <WeddingSidebar />
+        <WeddingSidebar onNavClick={() => {}} />
       </div>
 
       {isMobileSidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsMobileSidebarOpen(false)} />
           <div className="relative z-10 w-64 h-full">
-            <WeddingSidebar />
+            <WeddingSidebar onNavClick={() => setIsMobileSidebarOpen(false)} />
           </div>
         </div>
       )}
@@ -461,13 +461,13 @@ export default function AppPage() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-x-hidden overflow-y-auto">
           {!isLoaded ? (
-            <div className="p-6 space-y-6 animate-pulse-soft">
+            <div className="p-6 space-y-6 animate-pulse-soft w-full max-w-full box-border">
               <ViewSkeleton />
             </div>
           ) : !hasData && activeView === 'dashboard' ? (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-fade-in-up">
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-fade-in-up w-full max-w-full box-border">
               <div className="relative mb-8">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-rose-100 to-amber-100 dark:from-rose-950/40 dark:to-amber-950/40 flex items-center justify-center">
                   <Sparkles className="w-10 h-10 text-rose-500" />
@@ -514,7 +514,7 @@ export default function AppPage() {
               </div>
             </div>
           ) : (
-            <div className="animate-fade-in-up p-6">
+            <div className="animate-fade-in-up p-4 sm:p-6 w-full max-w-full box-border overflow-x-hidden">
               {renderView()}
             </div>
           )}

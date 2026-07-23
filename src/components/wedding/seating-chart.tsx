@@ -198,7 +198,7 @@ function GuestChip({
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 opacity-0 group-hover/gc:opacity-100 transition-opacity text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950 shrink-0"
+          className="h-6 w-6 opacity-100 md:opacity-0 md:group-hover/gc:opacity-100 transition-opacity text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950 shrink-0"
           onClick={(e) => { e.stopPropagation(); onUnassign(guest.id) }}
         >
           <X className="h-3 w-3" />
@@ -267,15 +267,15 @@ function FloorTableStandalone({
       >
         <button
           data-table-grip
-          className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 h-5 w-10 rounded-full bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 flex items-center justify-center opacity-0 group-hover/ft:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+          className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 h-8 w-14 md:h-5 md:w-10 rounded-full bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover/ft:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
           title="Drag to move table"
         >
-          <GripVertical className="h-3 w-3 text-gray-600 dark:text-gray-300" />
+          <GripVertical className="h-4 w-4 md:h-3 md:w-3 text-gray-600 dark:text-gray-300" />
         </button>
 
         <button
           data-table-edit-btn
-          className="absolute -top-2 -right-2 z-20 h-5 w-5 rounded-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center opacity-0 group-hover/ft:opacity-100 transition-opacity"
+          className="absolute -top-2 -right-2 z-20 h-6 w-6 md:h-5 md:w-5 rounded-full bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover/ft:opacity-100 transition-opacity"
           onClick={(e) => {
             e.stopPropagation()
             onStartEdit(table.id, table.capacity, table.label)

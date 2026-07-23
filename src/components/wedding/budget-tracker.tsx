@@ -692,9 +692,9 @@ export function BudgetTracker() {
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{cat.icon || '📁'}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                         <h3 className="font-semibold truncate">{cat.name}</h3>
-                        <div className="flex items-center gap-1 ml-2 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
                           <Button
                             variant="outline"
                             size="sm"

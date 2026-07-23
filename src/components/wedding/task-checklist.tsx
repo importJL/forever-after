@@ -237,7 +237,7 @@ function SortableTaskCard({ task, onEdit, onDelete, onToggleDone }: {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(task)}>
                   <Edit className="h-3 w-3" />
                 </Button>
@@ -790,7 +790,7 @@ export function TaskChecklist() {
                                     {task.assignee && <span className="flex items-center gap-1"><User className="h-3 w-3" /> {task.assignee}</span>}
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(task)}><Edit className="h-3.5 w-3.5" /></Button>
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => confirmDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
                                 </div>
@@ -1044,7 +1044,7 @@ export function TaskChecklist() {
                                             {task.assignee && <span className="flex items-center gap-1"><User className="h-3 w-3" /> {task.assignee}</span>}
                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(task)}><Edit className="h-3.5 w-3.5" /></Button>
                                           <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => confirmDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
                                         </div>
