@@ -33,18 +33,24 @@ function simplifyAddress(address: string): string[] {
     .trim()
   if (stripped && stripped !== address) candidates.push(stripped)
 
-  const parts = address.split(',').map((s) => s.trim()).filter(Boolean)
-  if (parts.length >= 3) {
-    candidates.push(parts.slice(-2).join(', '))
-    candidates.push(parts[parts.length - 1])
-  } else if (parts.length === 2) {
-    candidates.push(parts[1])
+  // Normalize "Hong Kong SAR, China" → "Hong Kong"
+  const normalized = address
+    .replace(/Hong\s*Kong\s*SAR\s*,?\s*China/gi, 'Hong Kong')
+    .replace(/,\s*SAR/gi, '')
+    .trim()
+  if (normalized !== address) candidates.push(normalized)
+
+  // Progressive trailing parts (from the normalized version if available)
+  const base = normalized !== address ? normalized : address
+  const parts = base.split(',').map((s) => s.trim()).filter(Boolean)
+  for (let i = parts.length - 1; i >= 1; i--) {
+    candidates.push(parts.slice(-i).join(', '))
   }
 
-  if (!address.toLowerCase().includes('hong kong')) {
-    candidates.push(`${address}, Hong Kong`)
-    for (let i = 0; i < candidates.length - 1; i++) {
-      candidates.push(`${candidates[i]}, Hong Kong`)
+  // Append ", Hong Kong" if no candidate already references it
+  if (!candidates.some((c) => c.toLowerCase().includes('hong kong'))) {
+    for (const c of [...candidates]) {
+      candidates.push(`${c}, Hong Kong`)
     }
   }
 
@@ -56,11 +62,14 @@ async function resolveAddress(address: string): Promise<[number, number] | null>
 
   for (const query of simplifyAddress(address)) {
     try {
-      const result = await geocoding.forward(query, { country: ['hk'] })
+      const result = await geocoding.forward(query)
       lastApiError = null
-      if (result.features.length > 0) {
-        return result.features[0].center as [number, number]
-      }
+
+      // Prefer the first relevant result that references Hong Kong
+      const hkResult = result.features.find(
+        (f) => (f.place_name.includes('Hong Kong') || f.place_name.includes('香港')) && f.relevance >= 0.5
+      )
+      if (hkResult) return hkResult.center as [number, number]
     } catch (err) {
       lastApiError = err
     }
