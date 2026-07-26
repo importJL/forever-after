@@ -153,10 +153,10 @@ const SORT_OPTIONS = [
 ]
 
 const STATUS_GROUPS = [
-  { key: 'todo' as const, label: 'To Do', icon: Circle, color: 'text-slate-500', bgClass: 'bg-slate-50 dark:bg-slate-900', borderClass: 'border-slate-200 dark:border-slate-700', headerBg: 'bg-slate-100 dark:bg-slate-800', headerText: 'text-slate-700 dark:text-slate-300' },
-  { key: 'in_progress' as const, label: 'In Progress', icon: Loader, color: 'text-amber-500', bgClass: 'bg-amber-50/50 dark:bg-amber-950/20', borderClass: 'border-amber-200 dark:border-amber-800', headerBg: 'bg-amber-100 dark:bg-amber-900/50', headerText: 'text-amber-700 dark:text-amber-300' },
-  { key: 'done' as const, label: 'Done', icon: CheckCircle2, color: 'text-emerald-500', bgClass: 'bg-emerald-50/50 dark:bg-emerald-950/20', borderClass: 'border-emerald-200 dark:border-emerald-800', headerBg: 'bg-emerald-100 dark:bg-emerald-900/50', headerText: 'text-emerald-700 dark:text-emerald-300' },
-  { key: 'cancelled' as const, label: 'Cancelled', icon: XCircle, color: 'text-rose-400', bgClass: 'bg-rose-50/50 dark:bg-rose-950/20', borderClass: 'border-rose-200 dark:border-rose-800', headerBg: 'bg-rose-100 dark:bg-rose-900/50', headerText: 'text-rose-700 dark:text-rose-300' },
+  { key: 'todo' as const, label: 'To Do', icon: Circle, color: 'text-slate-500 dark:text-slate-400', bgClass: 'bg-slate-50 dark:bg-slate-900', borderClass: 'border-slate-200 dark:border-slate-700', headerBg: 'bg-slate-100 dark:bg-slate-800', headerText: 'text-slate-700 dark:text-slate-300' },
+  { key: 'in_progress' as const, label: 'In Progress', icon: Loader, color: 'text-amber-500 dark:text-amber-400', bgClass: 'bg-amber-50/50 dark:bg-amber-950/20', borderClass: 'border-amber-200 dark:border-amber-800', headerBg: 'bg-amber-100 dark:bg-amber-900/50', headerText: 'text-amber-700 dark:text-amber-300' },
+  { key: 'done' as const, label: 'Done', icon: CheckCircle2, color: 'text-emerald-500 dark:text-emerald-400', bgClass: 'bg-emerald-50/50 dark:bg-emerald-950/20', borderClass: 'border-emerald-200 dark:border-emerald-800', headerBg: 'bg-emerald-100 dark:bg-emerald-900/50', headerText: 'text-emerald-700 dark:text-emerald-300' },
+  { key: 'cancelled' as const, label: 'Cancelled', icon: XCircle, color: 'text-rose-400 dark:text-rose-400', bgClass: 'bg-rose-50/50 dark:bg-rose-950/20', borderClass: 'border-rose-200 dark:border-rose-800', headerBg: 'bg-rose-100 dark:bg-rose-900/50', headerText: 'text-rose-700 dark:text-rose-300' },
 ]
 
 type ViewMode = 'list' | 'kanban' | 'timeline' | 'category'
@@ -252,7 +252,7 @@ function SortableTaskCard({ task, onEdit, onDelete, onToggleDone }: {
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(task)}>
                   <Edit className="h-3 w-3" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-700" onClick={() => onDelete(task)}>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 dark:text-red-400 dark:hover:text-red-300" onClick={() => onDelete(task)}>
                   <Trash2 className="h-3 w-3" />
                 </Button>
               </div>
@@ -632,7 +632,7 @@ export function TaskChecklist() {
                   <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-0.5">{inProgressTasks}</p>
                 </div>
                 <div className="h-9 w-9 rounded-lg bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                  <Flame className="h-4 w-4 text-amber-500" />
+                  <Flame className="h-4 w-4 text-amber-500 dark:text-amber-400" />
                 </div>
               </div>
             </CardContent>
@@ -645,7 +645,7 @@ export function TaskChecklist() {
                   <p className={`text-2xl font-bold mt-0.5 ${overdueTasks > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>{overdueTasks}</p>
                 </div>
                 <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${overdueTasks > 0 ? 'bg-red-100 dark:bg-red-900/50' : 'bg-gray-100 dark:bg-gray-800'}`}>
-                  <AlertTriangle className={`h-4 w-4 ${overdueTasks > 0 ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`} />
+                  <AlertTriangle className={`h-4 w-4 ${overdueTasks > 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`} />
                 </div>
               </div>
             </CardContent>
@@ -658,7 +658,7 @@ export function TaskChecklist() {
                   <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{completionPct}%</p>
                 </div>
                 <div className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
                 </div>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
@@ -674,7 +674,7 @@ export function TaskChecklist() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
                   <Input placeholder="Search tasks..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
                 </div>
                 <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)} className="rounded-lg border bg-gray-50 dark:bg-gray-900">
@@ -772,7 +772,7 @@ export function TaskChecklist() {
                         </SelectContent>
                       </Select>
                       {(statusFilter !== 'all' || priorityFilter !== 'all' || categoryFilter !== 'all') && (
-                        <Button variant="ghost" size="sm" className="h-8 text-xs text-gray-500" onClick={() => { setStatusFilter('all'); setPriorityFilter('all'); setCategoryFilter('all'); setSortBy('default') }}>
+                        <Button variant="ghost" size="sm" className="h-8 text-xs text-gray-500 dark:text-gray-400" onClick={() => { setStatusFilter('all'); setPriorityFilter('all'); setCategoryFilter('all'); setSortBy('default') }}>
                           Clear all
                         </Button>
                       )}
@@ -844,7 +844,7 @@ export function TaskChecklist() {
                                 </div>
                                 <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(task)}><Edit className="h-3.5 w-3.5" /></Button>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => confirmDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" onClick={() => confirmDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
                                 </div>
                               </div>
                             </CardContent>
@@ -879,7 +879,7 @@ export function TaskChecklist() {
                     <Card className="w-[272px] shadow-2xl rotate-2 opacity-90">
                       <CardContent className="p-3">
                         <div className="flex items-center gap-2">
-                          <GripVertical className="h-4 w-4 text-gray-300" />
+                          <GripVertical className="h-4 w-4 text-gray-300 dark:text-gray-600" />
                           <span className="text-sm font-medium">{activeDragTask.title}</span>
                         </div>
                       </CardContent>
@@ -906,7 +906,7 @@ export function TaskChecklist() {
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                       {format(timelineDays[0], 'MMM d')} — {format(timelineDays[timelineDays.length - 1], 'MMM d, yyyy')}
                     </h3>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                       <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Done</span>
                       <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" /> In Progress</span>
                       <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-400" /> To Do</span>
@@ -1040,9 +1040,9 @@ export function TaskChecklist() {
                                   <span className="text-[11px] text-gray-500 dark:text-gray-400">{catDone}/{catTasks.length} done</span>
                                 </div>
                               </div>
-                              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                            </div>
-                          </CardContent>
+                               <ChevronDown className={`h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                             </div>
+                           </CardContent>
                         </button>
                       </CollapsibleTrigger>
                       <AnimatePresence>
@@ -1098,7 +1098,7 @@ export function TaskChecklist() {
                                         </div>
                                         <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(task)}><Edit className="h-3.5 w-3.5" /></Button>
-                                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => confirmDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" onClick={() => confirmDelete(task)}><Trash2 className="h-3.5 w-3.5" /></Button>
                                         </div>
                                       </div>
                                     </CardContent>
@@ -1138,7 +1138,7 @@ export function TaskChecklist() {
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {editingTask ? <Edit className="h-5 w-5 text-rose-500" /> : <Plus className="h-5 w-5 text-rose-500" />}
+                {editingTask ? <Edit className="h-5 w-5 text-rose-500 dark:text-rose-400" /> : <Plus className="h-5 w-5 text-rose-500 dark:text-rose-400" />}
                 {editingTask ? 'Edit Task' : 'Add Task'}
               </DialogTitle>
             </DialogHeader>

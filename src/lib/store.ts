@@ -73,6 +73,7 @@ export interface BudgetExpense {
   date: string
   vendor: string
   paid: boolean
+  paidBy: string
   notes: string
 }
 

@@ -89,10 +89,10 @@ const RSVP_CONFIG: Record<
   Guest['rsvpStatus'],
   { label: string; color: string; icon: typeof CheckCircle }
 > = {
-  accepted: { label: 'Accepted', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle },
-  declined: { label: 'Declined', color: 'bg-rose-100 text-rose-700 border-rose-200', icon: XCircle },
-  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
-  maybe: { label: 'Maybe', color: 'bg-violet-100 text-violet-700 border-violet-200', icon: HelpCircle },
+  accepted: { label: 'Accepted', color: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800', icon: CheckCircle },
+  declined: { label: 'Declined', color: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800', icon: XCircle },
+  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800', icon: Clock },
+  maybe: { label: 'Maybe', color: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800', icon: HelpCircle },
 }
 
 // ─── Empty guest template ─────────────────────────────────────────────
@@ -189,11 +189,11 @@ export function GuestManager() {
     const overseas = guests.filter((g) => g.overseas).length
     return [
       { label: 'Total Guests', value: total, color: 'text-foreground', bgColor: 'bg-muted', icon: Users },
-      { label: 'Accepted', value: accepted, color: 'text-emerald-600', bgColor: 'bg-emerald-50', icon: CheckCircle },
-      { label: 'Pending', value: pending, color: 'text-amber-600', bgColor: 'bg-amber-50', icon: Clock },
-      { label: 'Declined', value: declined, color: 'text-rose-600', bgColor: 'bg-rose-50', icon: XCircle },
-      { label: 'Priority 1', value: priorityOne, color: 'text-rose-600', bgColor: 'bg-rose-50', icon: HelpCircle },
-      { label: 'Overseas', value: overseas, color: 'text-sky-600', bgColor: 'bg-sky-50', icon: HelpCircle },
+      { label: 'Accepted', value: accepted, color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-50 dark:bg-emerald-950/30', icon: CheckCircle },
+      { label: 'Pending', value: pending, color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-950/30', icon: Clock },
+      { label: 'Declined', value: declined, color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-50 dark:bg-rose-950/30', icon: XCircle },
+      { label: 'Priority 1', value: priorityOne, color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-50 dark:bg-rose-950/30', icon: HelpCircle },
+      { label: 'Overseas', value: overseas, color: 'text-sky-600 dark:text-sky-400', bgColor: 'bg-sky-50 dark:bg-sky-950/30', icon: HelpCircle },
     ]
   }, [guests])
 
@@ -542,7 +542,7 @@ export function GuestManager() {
                         </TableCell>
                         <TableCell className="text-center text-xs">
                           {guest.overseas ? (
-                            <Badge variant="outline" className="text-xs bg-sky-50 text-sky-700 border-sky-200">Yes</Badge>
+                            <Badge variant="outline" className="text-xs bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800">Yes</Badge>
                           ) : (
                             <span className="text-muted-foreground/50">—</span>
                           )}
@@ -649,7 +649,7 @@ export function GuestManager() {
                         </Badge>
                       )}
                       {guest.overseas && (
-                        <Badge variant="outline" className="text-xs bg-sky-50 text-sky-700 border-sky-200">Overseas</Badge>
+                        <Badge variant="outline" className="text-xs bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800">Overseas</Badge>
                       )}
                       {guest.role && guest.role !== 'guest' && (
                         <Badge variant="outline" className="capitalize text-xs">

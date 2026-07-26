@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
   Card,
@@ -108,6 +108,8 @@ const PREDEFINED_COLORS = [
   { label: 'Cyan', value: '#06b6d4' },
 ]
 
+const WEDDING_EMOJIS = ['🏛️','🍽️','📸','💐','🎵','👗','🎨','🚗','✉️','💍','📦','🎂','🥂','👰','🤵','🌺','🕊️','⭐','🎁']
+
 const SEED_CATEGORIES = [
   { name: 'Venue', icon: '🏛️', budgeted: 5000, color: '#e11d48' },
   { name: 'Catering', icon: '🍽️', budgeted: 8000, color: '#f59e0b' },
@@ -131,12 +133,16 @@ export function BudgetTracker() {
   const addBudgetCategory = useWeddingStore((s) => s.addBudgetCategory)
   const updateBudgetCategory = useWeddingStore((s) => s.updateBudgetCategory)
   const deleteBudgetCategory = useWeddingStore((s) => s.deleteBudgetCategory)
+  const addExpense = useWeddingStore((s) => s.addExpense)
+  const updateExpense = useWeddingStore((s) => s.updateExpense)
+  const deleteExpense = useWeddingStore((s) => s.deleteExpense)
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   // Category dialog state
   const [catDialogOpen, setCatDialogOpen] = useState(false)
   const [editingCat, setEditingCat] = useState<BudgetCategory | null>(null)
+  const [showCustomEmoji, setShowCustomEmoji] = useState(false)
   const [catForm, setCatForm] = useState({
     name: '',
     icon: '',
@@ -160,6 +166,23 @@ export function BudgetTracker() {
   // ── Delete confirmation state ─────────────────────────────────────────
   const [deleteConfirmCatId, setDeleteConfirmCatId] = useState<string | null>(null)
   const [deleteConfirmExp, setDeleteConfirmExp] = useState<{ catId: string; expId: string } | null>(null)
+  const [paidByCustom, setPaidByCustom] = useState(false)
+
+  // ── Members for payer dropdown ──────────────────────────────────────────
+  const [members, setMembers] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    client.models.Member.list().then(({ data }) => {
+      if (data) {
+        setMembers(
+          data.map((m) => ({
+            id: m.id,
+            name: [m.firstName, m.lastName].filter(Boolean).join(' ') || m.email || 'Unknown',
+          }))
+        )
+      }
+    }).catch(() => {})
+  }, [])
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
@@ -211,6 +234,7 @@ export function BudgetTracker() {
   function openAddCategory() {
     setEditingCat(null)
     setCatForm({ name: '', icon: '', budgeted: '', color: '#e11d48' })
+    setShowCustomEmoji(false)
     setCatDialogOpen(true)
   }
 
@@ -222,6 +246,7 @@ export function BudgetTracker() {
       budgeted: String(cat.budgeted),
       color: cat.color,
     })
+    setShowCustomEmoji(!WEDDING_EMOJIS.includes(cat.icon))
     setCatDialogOpen(true)
   }
 
@@ -297,8 +322,10 @@ export function BudgetTracker() {
       date: new Date().toISOString().split('T')[0],
       vendor: '',
       paid: false,
+      paidBy: '',
       notes: '',
     })
+    setPaidByCustom(false)
     setExpDialogOpen(true)
   }
 
@@ -311,8 +338,10 @@ export function BudgetTracker() {
       date: expense.date,
       vendor: expense.vendor,
       paid: expense.paid,
+      paidBy: expense.paidBy,
       notes: expense.notes,
     })
+    setPaidByCustom(!!expense.paidBy && !members.some((m) => m.name === expense.paidBy))
     setExpDialogOpen(true)
   }
 
@@ -329,31 +358,33 @@ export function BudgetTracker() {
 
     try {
       if (editingExp) {
-        const { errors } = await client.models.BudgetExpense.update({
+        const { data: updated, errors } = await client.models.BudgetExpense.update({
           id: editingExp.id,
           description: expForm.description.trim(),
           amount,
           date: expForm.date,
           vendor: expForm.vendor.trim(),
           paid: expForm.paid,
+          paidBy: expForm.paidBy.trim(),
           notes: expForm.notes.trim(),
         })
         if (errors) throw new Error(errors[0].message)
+        if (updated) updateExpense(expCatId, editingExp.id, updated)
         toast.success('Expense updated')
-        await fetchCategories()
       } else {
-        const { errors } = await client.models.BudgetExpense.create({
+        const { data: created, errors } = await client.models.BudgetExpense.create({
           categoryId: expCatId,
           description: expForm.description.trim(),
           amount,
           date: expForm.date,
           vendor: expForm.vendor.trim(),
           paid: expForm.paid,
+          paidBy: expForm.paidBy.trim(),
           notes: expForm.notes.trim(),
         })
         if (errors) throw new Error(errors[0].message)
+        if (created) addExpense(expCatId, created)
         toast.success('Expense added')
-        await fetchCategories()
       }
       setExpDialogOpen(false)
     } catch {
@@ -366,8 +397,8 @@ export function BudgetTracker() {
     try {
       const { errors } = await client.models.BudgetExpense.delete({ id: deleteConfirmExp.expId })
       if (errors) throw new Error(errors[0].message)
+      deleteExpense(deleteConfirmExp.catId, deleteConfirmExp.expId)
       toast.success('Expense deleted')
-      await fetchCategories()
     } catch {
       toast.error('An error occurred deleting the expense')
     } finally {
@@ -430,7 +461,7 @@ export function BudgetTracker() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Wallet className="h-6 w-6 text-rose-500" />
+           <Wallet className="h-6 w-6 text-rose-500 dark:text-rose-400" />
           <h1 className="text-2xl font-bold tracking-tight">Budget Tracker</h1>
         </div>
         <Button onClick={openAddCategory} size="sm">
@@ -472,7 +503,7 @@ export function BudgetTracker() {
             </div>
             <p
               className={`mt-1 text-2xl font-bold ${
-                remaining >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                remaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
               }`}
             >
               {formatCurrency(remaining)}
@@ -715,7 +746,7 @@ export function BudgetTracker() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-rose-500 hover:text-rose-600"
+                            className="h-8 w-8 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300"
                             onClick={() => setDeleteConfirmCatId(cat.id)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -748,7 +779,7 @@ export function BudgetTracker() {
                           <span className="text-muted-foreground">Remaining</span>
                           <p
                             className={`font-medium ${
-                              catRemaining >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                              catRemaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                             }`}
                           >
                             {formatCurrency(catRemaining)}
@@ -813,7 +844,7 @@ export function BudgetTracker() {
                                     </span>
                                     <Badge
                                       variant={exp.paid ? 'default' : 'secondary'}
-                                      className={exp.paid ? 'bg-emerald-600' : 'bg-amber-100 text-amber-800'}
+                                      className={exp.paid ? 'bg-emerald-600 dark:bg-emerald-500' : 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'}
                                     >
                                       {exp.paid ? 'Paid' : 'Unpaid'}
                                     </Badge>
@@ -841,7 +872,7 @@ export function BudgetTracker() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 text-rose-500 hover:text-rose-600"
+                                    className="h-7 w-7 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300"
                                     onClick={() => setDeleteConfirmExp({ catId: cat.id, expId: exp.id })}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -880,13 +911,56 @@ export function BudgetTracker() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="cat-icon">Icon (emoji)</Label>
-              <Input
-                id="cat-icon"
-                placeholder="e.g. 🏛️"
-                value={catForm.icon}
-                onChange={(e) => setCatForm({ ...catForm, icon: e.target.value })}
-              />
+              <Label>Icon</Label>
+              {!showCustomEmoji ? (
+                <>
+                  <div className="grid grid-cols-8 gap-1.5">
+                    {WEDDING_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setCatForm({ ...catForm, icon: emoji })}
+                        className={`flex h-9 w-9 items-center justify-center rounded-lg text-lg transition-colors ${
+                          catForm.icon === emoji
+                            ? 'bg-rose-100 ring-2 ring-rose-500 dark:bg-rose-900/40 dark:ring-rose-400'
+                            : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomEmoji(true)}
+                      className="rounded-md bg-gray-100 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+                    >
+                      Custom...
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="cat-icon"
+                    placeholder="e.g. 🏛️"
+                    value={catForm.icon}
+                    onChange={(e) => setCatForm({ ...catForm, icon: e.target.value })}
+                    className="flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustomEmoji(false)
+                      setCatForm({ ...catForm, icon: '' })
+                    }}
+                    className="rounded-md bg-gray-100 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+                  >
+                    Grid
+                  </button>
+                </div>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="cat-budgeted">Budgeted Amount ($)</Label>
@@ -1013,6 +1087,54 @@ export function BudgetTracker() {
                 }
               />
             </div>
+            {expForm.paid && (
+              <div className="grid gap-2">
+                <Label htmlFor="exp-paidBy">Paid By</Label>
+                {paidByCustom ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="exp-paidBy"
+                      value={expForm.paidBy}
+                      onChange={(e) => setExpForm({ ...expForm, paidBy: e.target.value })}
+                      placeholder="Enter payer name"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setPaidByCustom(false); setExpForm({ ...expForm, paidBy: '' }) }}
+                      className="shrink-0 text-xs text-gray-500 dark:text-gray-400"
+                    >
+                      Back
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    value={expForm.paidBy}
+                    onValueChange={(val) => {
+                      if (val === '__other__') {
+                        setPaidByCustom(true)
+                        setExpForm({ ...expForm, paidBy: '' })
+                      } else {
+                        setExpForm({ ...expForm, paidBy: val })
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="exp-paidBy">
+                      <SelectValue placeholder="Select a person" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members.map((m) => (
+                        <SelectItem key={m.id} value={m.name}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__other__">Other (custom)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="exp-notes">Notes</Label>
               <Textarea

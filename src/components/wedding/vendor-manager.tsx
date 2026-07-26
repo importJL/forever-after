@@ -70,10 +70,10 @@ const VENDOR_CATEGORIES = [
 ]
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  considering: { label: 'Considering', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  booked: { label: 'Booked', className: 'bg-sky-50 text-sky-700 border-sky-200' },
-  confirmed: { label: 'Confirmed', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  cancelled: { label: 'Cancelled', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+  considering: { label: 'Considering', className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800' },
+  booked: { label: 'Booked', className: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800' },
+  confirmed: { label: 'Confirmed', className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800' },
+  cancelled: { label: 'Cancelled', className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800' },
 }
 
 const emptyVendor: Omit<Vendor, 'id'> = {
@@ -120,7 +120,7 @@ function StarRating({
             className={`${sz} ${
               star <= rating
                 ? 'fill-amber-400 text-amber-400'
-                : 'fill-gray-200 text-gray-200'
+                : 'fill-gray-200 text-gray-200 dark:fill-gray-600 dark:text-gray-600'
             }`}
           />
         </button>
@@ -260,8 +260,8 @@ export function VendorManager() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Store className="h-7 w-7 text-rose-500" />
-          <h1 className="text-2xl font-bold text-gray-900">Vendor Management</h1>
+          <Store className="h-7 w-7 text-rose-500 dark:text-rose-400" />
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Vendor Management</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
@@ -280,7 +280,7 @@ export function VendorManager() {
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
               <Input
                 placeholder="Search vendors..."
                 value={search}
@@ -323,26 +323,26 @@ export function VendorManager() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-            <div className="text-xs text-gray-500 mt-1">Total Vendors</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total Vendors</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-sky-600">{stats.booked}</div>
-            <div className="text-xs text-gray-500 mt-1">Booked</div>
+            <div className="text-2xl font-bold text-sky-600 dark:text-sky-400">{stats.booked}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Booked</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-emerald-600">{stats.confirmed}</div>
-            <div className="text-xs text-gray-500 mt-1">Confirmed</div>
+            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.confirmed}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Confirmed</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-amber-600">{formatCurrency(stats.totalDeposits)}</div>
-            <div className="text-xs text-gray-500 mt-1">Total Deposits</div>
+            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(stats.totalDeposits)}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total Deposits</div>
           </CardContent>
         </Card>
       </div>
@@ -357,7 +357,7 @@ export function VendorManager() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">{vendor.name}</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{vendor.name}</h3>
                       <Badge variant="outline" className="text-xs mt-1">
                         {vendor.category}
                       </Badge>
@@ -374,7 +374,7 @@ export function VendorManager() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-red-500 hover:text-red-700"
+                        className="h-8 w-8 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                         onClick={() => setDeleteConfirmVendor(vendor)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -393,33 +393,33 @@ export function VendorManager() {
 
                   {/* Contact Info */}
                   {vendor.contactPerson && (
-                    <p className="text-sm text-gray-600">{vendor.contactPerson}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{vendor.contactPerson}</p>
                   )}
                   <div className="space-y-1.5 text-sm">
                     {vendor.email && (
-                      <div className="flex items-center gap-2 text-gray-500">
+                      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                         <Mail className="h-3.5 w-3.5 shrink-0" />
-                        <a href={`mailto:${vendor.email}`} className="hover:text-rose-500 truncate">
+                        <a href={`mailto:${vendor.email}`} className="hover:text-rose-500 dark:hover:text-rose-400 truncate">
                           {vendor.email}
                         </a>
                       </div>
                     )}
                     {vendor.phone && (
-                      <div className="flex items-center gap-2 text-gray-500">
+                      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                         <Phone className="h-3.5 w-3.5 shrink-0" />
-                        <a href={`tel:${vendor.phone}`} className="hover:text-rose-500">
+                        <a href={`tel:${vendor.phone}`} className="hover:text-rose-500 dark:hover:text-rose-400">
                           {vendor.phone}
                         </a>
                       </div>
                     )}
                     {vendor.website && (
-                      <div className="flex items-center gap-2 text-gray-500">
+                      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                         <Globe className="h-3.5 w-3.5 shrink-0" />
                         <a
                           href={vendor.website.startsWith('http') ? vendor.website : `https://${vendor.website}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="hover:text-rose-500 truncate flex items-center gap-1"
+                          className="hover:text-rose-500 dark:hover:text-rose-400 truncate flex items-center gap-1"
                         >
                           <span className="truncate">{vendor.website.replace(/^https?:\/\//, '')}</span>
                           <ExternalLink className="h-3 w-3 shrink-0" />
@@ -427,11 +427,11 @@ export function VendorManager() {
                       </div>
                     )}
                     {(vendor.address || vendor.district) && (
-                      <div className="flex items-center gap-2 text-gray-500">
+                      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                         <LocationLink
                           locationName={vendor.name}
                           address={`${vendor.address}${vendor.district ? `, ${vendor.district}` : ''}${vendor.city ? `, ${vendor.city}` : ''}`}
-                          className="text-gray-500 hover:text-rose-500"
+                          className="text-gray-500 dark:text-gray-400 hover:text-rose-500 dark:hover:text-rose-400"
                         />
                       </div>
                     )}
@@ -441,10 +441,10 @@ export function VendorManager() {
                   <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                     <div>
                       {vendor.price > 0 && (
-                        <span className="font-semibold text-gray-900">{formatCurrency(vendor.price)}</span>
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(vendor.price)}</span>
                       )}
                       {vendor.depositPaid > 0 && (
-                        <span className="text-xs text-gray-400 ml-2">
+                        <span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
                           (Deposit: {formatCurrency(vendor.depositPaid)})
                         </span>
                       )}
@@ -453,7 +453,7 @@ export function VendorManager() {
 
                   {/* Notes */}
                   {vendor.notes && (
-                    <p className="text-xs text-gray-400 line-clamp-2">{vendor.notes}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 line-clamp-2">{vendor.notes}</p>
                   )}
                 </CardContent>
               </Card>
@@ -462,9 +462,9 @@ export function VendorManager() {
         </div>
       ) : (
         <div className="text-center py-16">
-          <Store className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-500">No vendors found</h3>
-          <p className="text-sm text-gray-400 mt-1">
+          <Store className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400">No vendors found</h3>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
             {vendors.length === 0
               ? 'Start by adding your first vendor.'
               : 'Try adjusting your filters.'}

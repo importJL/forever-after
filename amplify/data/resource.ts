@@ -87,6 +87,7 @@ const schema = a.schema({
     date: a.string().default(''),
     vendor: a.string().default(''),
     paid: a.boolean().default(false),
+    paidBy: a.string().default(''),
     notes: a.string().default(''),
     category: a.belongsTo('BudgetCategory', 'categoryId'),
   }).authorization((allow) => [
