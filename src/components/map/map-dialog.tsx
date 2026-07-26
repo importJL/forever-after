@@ -24,34 +24,67 @@ interface MapDialogProps {
   title?: string
 }
 
+function simplifyAddress(address: string): string[] {
+  const candidates: string[] = [address]
+
+  const stripped = address
+    .replace(/^(Flat|Room|Unit|Shop|Suite)\s+\S+,\s*/i, '')
+    .replace(/^(\d+\/F|[Gg]\/F),\s*/i, '')
+    .trim()
+  if (stripped && stripped !== address) candidates.push(stripped)
+
+  const parts = address.split(',').map((s) => s.trim()).filter(Boolean)
+  if (parts.length >= 3) {
+    candidates.push(parts.slice(-2).join(', '))
+    candidates.push(parts[parts.length - 1])
+  } else if (parts.length === 2) {
+    candidates.push(parts[1])
+  }
+
+  if (!address.toLowerCase().includes('hong kong')) {
+    candidates.push(`${address}, Hong Kong`)
+    for (let i = 0; i < candidates.length - 1; i++) {
+      candidates.push(`${candidates[i]}, Hong Kong`)
+    }
+  }
+
+  return [...new Set(candidates)]
+}
+
+async function resolveAddress(address: string): Promise<[number, number] | null> {
+  for (const query of simplifyAddress(address)) {
+    try {
+      const result = await geocoding.forward(query, { country: ['hk'] })
+      if (result.features.length > 0) {
+        return result.features[0].center as [number, number]
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return null
+}
+
 export function MapDialog({ open, onClose, address, locationName, title }: MapDialogProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maptilersdk.Map | null>(null)
+  const genRef = useRef(0)
   const [coords, setCoords] = useState<[number, number] | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!open || !address) return
 
-    setLoading(true)
-    setError('')
+    const gen = ++genRef.current
 
-    geocoding.forward(address, { language: ['en'] })
-      .then((result) => {
-        if (result.features.length > 0) {
-          const [lng, lat] = result.features[0].center as [number, number]
-          setCoords([lng, lat])
-        } else {
-          setError('Location not found')
-          setLoading(false)
-        }
-      })
-      .catch((err) => {
-        console.error('MapTiler geocoding error:', err)
-        setError('Failed to geocode address')
-        setLoading(false)
-      })
+    resolveAddress(address).then((result) => {
+      if (gen !== genRef.current) return
+      if (result) {
+        setCoords(result)
+      } else {
+        setError("Couldn't find this location on the map. Try a simpler address (e.g. street name + district).")
+      }
+    })
   }, [open, address])
 
   useEffect(() => {
@@ -72,13 +105,14 @@ export function MapDialog({ open, onClose, address, locationName, title }: MapDi
       .addTo(map)
 
     mapRef.current = map
-    setLoading(false)
 
     return () => {
       map.remove()
       mapRef.current = null
     }
   }, [open, coords])
+
+  const pending = open && address && !coords && !error
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
@@ -90,7 +124,7 @@ export function MapDialog({ open, onClose, address, locationName, title }: MapDi
           </DialogTitle>
         </DialogHeader>
         <div className="relative h-[400px] w-full rounded-lg overflow-hidden">
-          {loading && (
+          {pending && (
             <div className="absolute inset-0 flex items-center justify-center bg-muted/50 z-10">
               <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -99,8 +133,9 @@ export function MapDialog({ open, onClose, address, locationName, title }: MapDi
             </div>
           )}
           {error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-muted/50 z-10">
-              <p className="text-sm text-destructive">{error}</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-muted/50 z-10 p-6 text-center">
+              <MapPin className="h-8 w-8 text-destructive/60" />
+              <p className="text-sm text-destructive max-w-sm">{error}</p>
             </div>
           )}
           <div ref={mapContainer} className="h-full w-full" />
