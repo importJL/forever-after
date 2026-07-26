@@ -141,6 +141,17 @@ const PRIORITY_CONFIG: Record<string, { label: string; className: string; dotCla
   urgent: { label: 'Urgent', className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800', dotClass: 'bg-rose-500' },
 }
 
+const PRIORITY_ORDER: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 }
+
+const SORT_OPTIONS = [
+  { value: 'default', label: 'Default order' },
+  { value: 'dueDate-asc', label: 'Due date (earliest)' },
+  { value: 'dueDate-desc', label: 'Due date (latest)' },
+  { value: 'priority-desc', label: 'Priority (highest)' },
+  { value: 'title-asc', label: 'Title (A-Z)' },
+  { value: 'assignee-asc', label: 'Assignee (A-Z)' },
+]
+
 const STATUS_GROUPS = [
   { key: 'todo' as const, label: 'To Do', icon: Circle, color: 'text-slate-500', bgClass: 'bg-slate-50 dark:bg-slate-900', borderClass: 'border-slate-200 dark:border-slate-700', headerBg: 'bg-slate-100 dark:bg-slate-800', headerText: 'text-slate-700 dark:text-slate-300' },
   { key: 'in_progress' as const, label: 'In Progress', icon: Loader, color: 'text-amber-500', bgClass: 'bg-amber-50/50 dark:bg-amber-950/20', borderClass: 'border-amber-200 dark:border-amber-800', headerBg: 'bg-amber-100 dark:bg-amber-900/50', headerText: 'text-amber-700 dark:text-amber-300' },
@@ -306,6 +317,7 @@ export function TaskChecklist() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('default')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [formData, setFormData] = useState(emptyTask)
@@ -332,11 +344,39 @@ export function TaskChecklist() {
     })
   }, [tasks, search, statusFilter, priorityFilter, categoryFilter])
 
+  const sortedTasks = useMemo(() => {
+    if (sortBy === 'default') return filteredTasks
+    return [...filteredTasks].sort((a, b) => {
+      switch (sortBy) {
+        case 'dueDate-asc': {
+          if (!a.dueDate && !b.dueDate) return 0
+          if (!a.dueDate) return 1
+          if (!b.dueDate) return -1
+          return parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime()
+        }
+        case 'dueDate-desc': {
+          if (!a.dueDate && !b.dueDate) return 0
+          if (!a.dueDate) return 1
+          if (!b.dueDate) return -1
+          return parseISO(b.dueDate).getTime() - parseISO(a.dueDate).getTime()
+        }
+        case 'priority-desc':
+          return (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2)
+        case 'title-asc':
+          return a.title.localeCompare(b.title)
+        case 'assignee-asc':
+          return (a.assignee || '').localeCompare(b.assignee || '')
+        default:
+          return 0
+      }
+    })
+  }, [filteredTasks, sortBy])
+
   const groupedByStatus = useMemo(() => {
     const groups: Record<string, Task[]> = { todo: [], in_progress: [], done: [], cancelled: [] }
-    filteredTasks.forEach((t) => { if (groups[t.status]) groups[t.status].push(t) })
+    sortedTasks.forEach((t) => { if (groups[t.status]) groups[t.status].push(t) })
     return groups
-  }, [filteredTasks])
+  }, [sortedTasks])
 
   const groupedByCategory = useMemo(() => {
     const groups: Record<string, Task[]> = {}
@@ -719,8 +759,20 @@ export function TaskChecklist() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <Separator orientation="vertical" className="h-6" />
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Sort:</span>
+                      <Select value={sortBy} onValueChange={setSortBy}>
+                        <SelectTrigger className="w-[160px] h-8 text-xs">
+                          <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SORT_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       {(statusFilter !== 'all' || priorityFilter !== 'all' || categoryFilter !== 'all') && (
-                        <Button variant="ghost" size="sm" className="h-8 text-xs text-gray-500" onClick={() => { setStatusFilter('all'); setPriorityFilter('all'); setCategoryFilter('all') }}>
+                        <Button variant="ghost" size="sm" className="h-8 text-xs text-gray-500" onClick={() => { setStatusFilter('all'); setPriorityFilter('all'); setCategoryFilter('all'); setSortBy('default') }}>
                           Clear all
                         </Button>
                       )}
