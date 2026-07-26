@@ -52,16 +52,21 @@ function simplifyAddress(address: string): string[] {
 }
 
 async function resolveAddress(address: string): Promise<[number, number] | null> {
+  let lastApiError: unknown = null
+
   for (const query of simplifyAddress(address)) {
     try {
       const result = await geocoding.forward(query, { country: ['hk'] })
+      lastApiError = null
       if (result.features.length > 0) {
         return result.features[0].center as [number, number]
       }
-    } catch {
-      // try next candidate
+    } catch (err) {
+      lastApiError = err
     }
   }
+
+  if (lastApiError) throw lastApiError
   return null
 }
 
@@ -77,14 +82,19 @@ export function MapDialog({ open, onClose, address, locationName, title }: MapDi
 
     const gen = ++genRef.current
 
-    resolveAddress(address).then((result) => {
-      if (gen !== genRef.current) return
-      if (result) {
-        setCoords(result)
-      } else {
-        setError("Couldn't find this location on the map. Try a simpler address (e.g. street name + district).")
-      }
-    })
+    resolveAddress(address)
+      .then((result) => {
+        if (gen !== genRef.current) return
+        if (result) {
+          setCoords(result)
+        } else {
+          setError("Couldn't find this location on the map. Try a simpler address (e.g. street name + district).")
+        }
+      })
+      .catch(() => {
+        if (gen !== genRef.current) return
+        setError('Map service is currently unavailable. Please try again later.')
+      })
   }, [open, address])
 
   useEffect(() => {
